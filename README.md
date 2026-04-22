@@ -1,11 +1,15 @@
 ﻿# AI Quant Screener
 
-前端已迁移为 Vue，后端已按 `Plan.md` 完成 Phase 1-4 的基础实现：
-- FastAPI 服务与路由
-- SQLite + SQLAlchemy 本地缓存数据库
-- iFinD Token 自动续期 + 数据请求封装 + 24 小时缓存拦截
-- LangGraph 四智能体工作流（Data/Quant/MacroRisk/CIO）
-- `/run` 与 `/stream`（SSE）接口
+AI Quant Screener 是一个前后端一体的量化选股原型系统：
+1. 前端使用 Vue 3 提供聊天式交互与结果可视化。
+2. 后端使用 FastAPI + LangGraph 执行多智能体工作流。
+3. 数据层使用 SQLite + SQLAlchemy 进行本地缓存与 Token 持久化。
+
+## 核心能力
+1. 自然语言输入选股指令。
+2. 四智能体流水线执行：Data -> Quant -> MacroRisk -> CIO。
+3. 支持实时流式状态（SSE）与非流式兜底接口。
+4. 输出结构化股票池 + Markdown 研报。
 
 ## 系统流程图
 ```mermaid
@@ -27,27 +31,32 @@ flowchart TD
   K --> L[前端更新 Agent 状态、股票池、研报视图]
 ```
 
-## 后端目录
+## 技术栈
+- 前端: Vue 3, Vue Router, Vite, Tailwind CSS v4
+- 后端: FastAPI, SQLAlchemy, Pandas, LangChain, LangGraph
+- 数据库: SQLite
+- 模型接口: DeepSeek（可选，未配置时自动降级 mock）
+
+## 目录结构
 ```text
-backend/
-├─ __init__.py
-├─ database.py
-├─ models.py
-├─ ifind_client.py
-├─ agent_workflow.py
-└─ main.py
-init_db.py
-requirements.txt
-.env.example
+.
+├─ app/                    # Vue 前端
+├─ backend/                # FastAPI 后端
+│  ├─ main.py              # API 入口
+│  ├─ database.py          # 数据库连接与会话
+│  ├─ models.py            # ORM 模型
+│  ├─ ifind_client.py      # iFinD 封装 + 缓存逻辑
+│  └─ agent_workflow.py    # LangGraph 工作流
+├─ styles/                 # 前端样式
+├─ init_db.py              # 初始化数据库脚本
+├─ requirements.txt        # Python 依赖
+├─ package.json            # Node 依赖
+└─ .env.example            # 环境变量模板
 ```
 
-## 阶段交付映射
-1. Phase 1: `database.py` + `models.py` + `init_db.py`
-2. Phase 2: `ifind_client.py`（TokenManager、fetch_basic_data、SQLite 缓存）
-3. Phase 3: `agent_workflow.py`（LangGraph StateGraph + DeepSeek 节点）
-4. Phase 4: `main.py`（`/api/v1/screener/run` + `/api/v1/screener/stream`）
+## 快速开始
 
-## 后端快速启动
+### 1) 启动后端
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
@@ -56,57 +65,45 @@ python init_db.py
 uvicorn backend.main:app --reload --port 8000
 ```
 
-启动后将生成根目录数据库文件：`quant_system.db`。
-
-## 环境变量
-复制 `.env.example` 到 `.env` 后配置：
-1. `IFIND_REFRESH_TOKEN`（必填，生产场景）
-2. `DEEPSEEK_API_KEY`（建议填写）
-
-未配置时系统会使用 mock/fallback 结果，便于本地联调。
-
-## API 示例
-
-### 1) 执行筛选流程
-```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/screener/run" ^
-  -H "Content-Type: application/json" ^
-  -d "{\"query\":\"筛选低估值且净利润增长为正的主板股票\"}"
-```
-
-返回：
-1. `stock_pool`: JSON 表格数据（来自 DataFrame）
-2. `final_report`: Markdown 研报
-3. `risk_assessment`: 风险评估摘要
-
-### 2) SSE 流式状态
-```bash
-curl "http://127.0.0.1:8000/api/v1/screener/stream?query=筛选稳健高成长主板股票"
-```
-
-会持续收到：
-1. 各 Agent 进度事件
-2. 结果事件（表格 + Markdown）
-3. `done` 结束事件
-
-## 前端启动
+### 2) 启动前端
 ```bash
 npm install
 npm run dev
 ```
 
-## 前后端联调
-前端默认请求 `http://127.0.0.1:8000`。如需切换地址，可在项目根目录创建 `.env.local`：
+## 环境变量
+复制 `.env.example` 为 `.env` 后按需配置。
 
+| 变量名 | 说明 | 是否必填 |
+| --- | --- | --- |
+| `IFIND_REFRESH_TOKEN` | iFinD 刷新令牌 | 生产建议必填 |
+| `IFIND_ACCESS_TOKEN` | 初始 access token（可选） | 否 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | 建议填写 |
+| `VITE_API_BASE_URL` | 前端后端基地址 | 默认 `http://127.0.0.1:8000` |
+
+说明：未配置真实 Key 时，系统会自动返回可联调的 mock/fallback 数据。
+
+## API 说明
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/v1/screener/run` | 非流式执行选股工作流 |
+| `GET` | `/api/v1/screener/stream` | SSE 流式返回 Agent 状态与结果 |
+| `GET` | `/api/v1/health` | 健康检查 |
+
+### 请求示例
 ```bash
-VITE_API_BASE_URL=http://127.0.0.1:8000
+curl -X POST "http://127.0.0.1:8000/api/v1/screener/run" \
+  -H "Content-Type: application/json" \
+  -d "{\"query\":\"筛选低估值且净利润增长为正的主板股票\"}"
 ```
 
-联调推荐顺序：
-1. 启动后端：`uvicorn backend.main:app --reload --port 8000`
-2. 启动前端：`npm run dev`
-3. 在聊天页输入自然语言策略，前端会优先走 `/api/v1/screener/stream`（SSE），异常时自动回退 `/api/v1/screener/run`
+## 联调说明
+1. 前端默认优先走 SSE 接口 `/api/v1/screener/stream`。
+2. SSE 异常时自动回退到 `/api/v1/screener/run`。
+3. 若后端地址不是本机 `8000` 端口，请在前端设置 `VITE_API_BASE_URL`。
 
-## 说明
-1. 当前 iFinD 响应解析做了兼容处理，若你提供精确字段规范，我可以再按真实返回结构做一版严格映射。
-2. LangGraph 与 DeepSeek 已接入；无 Key 时会自动降级到可调试的 mock 输出。
+## 开发建议
+1. 优先保证 `init_db.py` 成功执行后再启动后端。
+2. 本地数据库文件 `quant_system.db` 为运行时产物，不应提交。
+3. 如需接入真实 iFinD 返回结构，建议先固定字段映射再扩展前端展示。
