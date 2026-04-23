@@ -55,14 +55,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-[var(--color-surface)]/20 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] border-r border-white/5 relative z-10 w-full overflow-hidden">
+  <div class="flex flex-col h-full bg-[var(--color-surface)] relative z-10 w-full overflow-hidden md:rounded-xl md:border md:border-[var(--color-surface-border)]">
     <div class="h-14 border-b border-[var(--color-surface-border)] flex items-center justify-between px-4 sticky top-0 bg-[var(--color-surface)] z-20">
       <div class="flex items-center space-x-2">
-        <BrainCircuit class="w-5 h-5 text-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)] rounded-full" />
-        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">AI Quant Screener</span>
+        <BrainCircuit class="w-5 h-5 text-blue-600" />
+        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-700 to-indigo-500 bg-clip-text text-transparent">AI Quant Screener</span>
       </div>
-      <div class="flex items-center space-x-1 text-[10px] text-green-400 bg-green-500/10 px-2 py-1 rounded-full border border-green-500/20 shadow-[0_0_8px_rgba(46,189,133,0.3)]">
-        <div class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+      <div class="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200">
+        <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
         <span>后端已连接</span>
       </div>
     </div>
@@ -78,14 +78,14 @@ onBeforeUnmount(() => {
       <p v-if="streamMessage" class="mt-2 text-xs text-[var(--color-text-secondary)]">{{ streamMessage }}</p>
       <div
         v-if="cioThinking"
-        class="mt-2 rounded-md border border-blue-500/20 bg-blue-500/5 p-2 text-[11px] leading-5 text-blue-200"
+        class="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] leading-5 text-blue-800"
       >
-        <div class="font-semibold text-blue-300 mb-1">CIO 推理过程（SSE）</div>
+        <div class="font-semibold text-blue-700 mb-1">CIO 推理过程（SSE）</div>
         <pre class="whitespace-pre-wrap break-words font-sans">{{ cioThinking }}</pre>
       </div>
     </div>
 
-    <div ref="scrollRef" class="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+    <div ref="scrollRef" class="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth custom-scrollbar bg-[var(--color-background)]">
       <div
         v-for="msg in chatHistory"
         :key="msg.id"
@@ -94,23 +94,23 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="msg.sender === 'ai'"
-          class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center mr-2 border border-blue-500/30 shrink-0 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+          class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-2 border border-blue-200 shrink-0"
         >
-          <Sparkles class="w-4 h-4 text-blue-400" />
+          <Sparkles class="w-4 h-4 text-blue-600" />
         </div>
 
         <div
-          class="p-3 rounded-2xl text-[13px] leading-relaxed relative"
+          class="p-3 rounded-2xl text-[13px] leading-relaxed relative border"
           :class="
             msg.sender === 'user'
-              ? 'bg-blue-600/30 text-blue-50 border border-blue-500/30 rounded-tr-sm shadow-[0_4px_15px_rgba(59,130,246,0.1)]'
-              : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-sm glass-panel'
+              ? 'bg-blue-600 text-white border-blue-600 rounded-tr-sm'
+              : 'bg-white text-[var(--color-text-primary)] border-[var(--color-surface-border)] rounded-tl-sm'
           "
         >
           {{ msg.text }}
           <div
             v-if="msg.isAction"
-            class="mt-3 pt-3 border-t border-white/10 flex items-center space-x-2 text-xs text-blue-400"
+            class="mt-3 pt-3 border-t border-blue-100 flex items-center space-x-2 text-xs text-blue-700"
           >
             <Activity class="w-4 h-4" />
             <span>查看最新股票池与研报</span>
@@ -119,9 +119,9 @@ onBeforeUnmount(() => {
 
         <div
           v-if="msg.sender === 'user'"
-          class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center ml-2 border border-white/20 shrink-0"
+          class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center ml-2 border border-slate-200 shrink-0"
         >
-          <User class="w-4 h-4 text-gray-300" />
+          <User class="w-4 h-4 text-slate-600" />
         </div>
       </div>
 
@@ -137,16 +137,16 @@ onBeforeUnmount(() => {
 
     <div class="p-4 bg-[var(--color-surface)] border-t border-[var(--color-surface-border)]">
       <div class="relative flex items-center glass-panel rounded-xl overflow-hidden shadow-inner-white">
-        <div class="pl-3 pr-2 text-gray-500 font-mono text-sm shrink-0 flex items-center">/</div>
+        <div class="pl-3 pr-2 text-slate-400 font-mono text-sm shrink-0 flex items-center">/</div>
         <input
           v-model="input"
           type="text"
           placeholder="输入选股策略，例如：筛选低估值且净利润增长为正的主板股票"
-          class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-2 text-[var(--color-text-primary)] placeholder-gray-500 outline-none"
+          class="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-2 text-[var(--color-text-primary)] placeholder-slate-400 outline-none"
           @keydown.enter="handleSend"
         />
         <button
-          class="p-2 mr-1 text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:hover:text-blue-400 transition-colors cursor-pointer"
+          class="p-2 mr-1 text-blue-600 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-blue-600 transition-colors cursor-pointer"
           :disabled="!input.trim() || isRunning"
           @click="handleSend"
         >

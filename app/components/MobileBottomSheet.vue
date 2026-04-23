@@ -9,7 +9,7 @@ const { isMobileSheetOpen, closeMobileSheet } = useAppStore();
   <Transition name="fade">
     <div
       v-if="isMobileSheetOpen"
-      class="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+      class="fixed inset-0 bg-slate-900/30 z-40 md:hidden backdrop-blur-[2px]"
       @click="closeMobileSheet"
     />
   </Transition>
@@ -23,7 +23,7 @@ const { isMobileSheetOpen, closeMobileSheet } = useAppStore();
         class="w-full flex justify-center pt-3 pb-2 cursor-pointer bg-[var(--color-surface)] sticky top-0 z-10"
         @click="closeMobileSheet"
       >
-        <div class="w-12 h-1.5 rounded-full bg-white/20" />
+        <div class="w-12 h-1.5 rounded-full bg-slate-300" />
       </div>
 
       <div class="flex-1 overflow-y-auto custom-scrollbar px-6 pb-20">

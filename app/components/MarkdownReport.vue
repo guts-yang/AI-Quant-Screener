@@ -6,7 +6,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <div class="markdown-content prose prose-invert max-w-none text-sm leading-relaxed" :class="props.className">
+  <div class="markdown-content prose max-w-none text-sm leading-relaxed" :class="props.className">
     <template v-if="props.content">
       <pre class="whitespace-pre-wrap break-words text-[var(--color-text-secondary)] font-sans text-sm leading-7">{{ props.content }}</pre>
     </template>

@@ -1,5 +1,7 @@
-﻿<script setup lang="ts">
-import { computed } from "vue";
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import { Copy, Download, FileText, ShieldAlert, Sparkles } from "lucide-vue-next";
 import { useAppStore } from "../store";
 import MarkdownReport from "../components/MarkdownReport.vue";
 import MarketBadge from "../components/MarketBadge.vue";
@@ -10,62 +12,256 @@ const props = withDefaults(
     isDesktop?: boolean;
   }>(),
   {
-    isDesktop: false,
+    isDesktop: undefined,
   },
 );
 
-const { selectedStock, finalReport, riskAssessment } = useAppStore();
+type TabKey = "report" | "risk" | "factors";
+
+const router = useRouter();
+const { selectedStock, finalReport, riskAssessment, stocks } = useAppStore();
+const isDesktopView = computed(() => {
+  if (typeof props.isDesktop === "boolean") return props.isDesktop;
+  if (typeof window === "undefined") return true;
+  return window.matchMedia("(min-width: 768px)").matches;
+});
+
+const activeTab = ref<TabKey>("report");
+const isCopied = ref(false);
+const reportUpdatedAt = ref<Date | null>(null);
+
+watch(
+  finalReport,
+  (nextReport) => {
+    if (nextReport?.trim()) {
+      reportUpdatedAt.value = new Date();
+    }
+  },
+  { immediate: true },
+);
 
 const changeClass = computed(() => {
   if (!selectedStock.value) return "text-[var(--color-text-primary)]";
   return selectedStock.value.change >= 0 ? "text-[var(--color-up)]" : "text-[var(--color-down)]";
 });
+
+const stockRank = computed(() => {
+  if (!selectedStock.value) return "-";
+  const index = stocks.value.findIndex((item) => item.thsCode === selectedStock.value?.thsCode);
+  return index >= 0 ? `#${index + 1}` : "-";
+});
+
+const reportWordCount = computed(() => {
+  const text = finalReport.value || "";
+  return text.replace(/\s+/g, "").length;
+});
+
+const riskSummary = computed(() => {
+  if (!selectedStock.value) return { level: "Pending", style: "text-slate-600 bg-slate-100 border-slate-200" };
+  let score = 0;
+  if (selectedStock.value.pe > 35) score += 2;
+  if (selectedStock.value.profitGrowth < 0) score += 3;
+  if (selectedStock.value.revGrowth < 0) score += 2;
+  if (selectedStock.value.change < -3) score += 1;
+
+  if (score >= 5) return { level: "High", style: "text-red-700 bg-red-50 border-red-200" };
+  if (score >= 3) return { level: "Medium", style: "text-amber-700 bg-amber-50 border-amber-200" };
+  return { level: "Low", style: "text-emerald-700 bg-emerald-50 border-emerald-200" };
+});
+
+const keyFactors = computed(() => {
+  if (!selectedStock.value) return [];
+  return [
+    {
+      label: "Valuation (PE)",
+      value: selectedStock.value.pe.toFixed(1),
+      status: selectedStock.value.pe <= 30 ? "Reasonable" : "Elevated",
+    },
+    {
+      label: "Net Profit Growth",
+      value: `${selectedStock.value.profitGrowth.toFixed(2)}%`,
+      status: selectedStock.value.profitGrowth > 0 ? "Improving" : "Weak",
+    },
+    {
+      label: "Revenue Growth",
+      value: `${selectedStock.value.revGrowth.toFixed(2)}%`,
+      status: selectedStock.value.revGrowth > 0 ? "Positive" : "Slowing",
+    },
+    {
+      label: "ROE",
+      value: `${selectedStock.value.roe.toFixed(2)}%`,
+      status: selectedStock.value.roe >= 10 ? "Solid" : "Normal",
+    },
+  ];
+});
+
+const copyMarkdown = async () => {
+  if (!finalReport.value?.trim()) return;
+  await navigator.clipboard.writeText(finalReport.value);
+  isCopied.value = true;
+  setTimeout(() => {
+    isCopied.value = false;
+  }, 1500);
+};
+
+const downloadMarkdown = () => {
+  const content = finalReport.value?.trim();
+  if (!content) return;
+
+  const filename = `${selectedStock.value?.code ?? "report"}-${Date.now()}.md`;
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
+const goPool = () => {
+  router.push("/pool");
+};
 </script>
 
 <template>
   <div
     v-if="!selectedStock"
-    class="flex flex-col items-center justify-center h-full text-[var(--color-text-secondary)] space-y-4"
+    class="h-full min-h-[260px] glass-panel rounded-xl p-8 flex flex-col items-center justify-center text-center text-[var(--color-text-secondary)]"
   >
-    <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-      <span class="text-2xl opacity-50">📊</span>
+    <div class="w-14 h-14 rounded-full bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mb-4">
+      <FileText class="w-6 h-6" />
     </div>
-    <p>在左侧列表中选择一只股票以查看详细研报</p>
+    <p class="text-base text-[var(--color-text-primary)] font-semibold">No stock selected</p>
+    <p class="text-sm mt-2">Pick one candidate in Stock Pool to view the full AI report and risk suggestions.</p>
+    <button class="mt-5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500" @click="goPool">Open Stock Pool</button>
   </div>
 
-  <div v-else class="w-full h-full text-[var(--color-text-primary)] relative" :class="!props.isDesktop ? 'pt-2' : ''">
-    <div class="flex items-start justify-between mb-6 pb-4 border-b border-[var(--color-surface-border)] sticky top-0 bg-[var(--color-background)] z-10">
-      <div>
-        <div class="flex items-center space-x-2 mb-1">
-          <h2 class="text-xl font-bold tracking-wider">{{ selectedStock.name }}</h2>
-          <MarketBadge :market="selectedStock.market" />
-          <span class="text-sm text-gray-400 font-mono tracking-widest">{{ selectedStock.thsCode }}</span>
+  <div v-else class="w-full h-full flex flex-col text-[var(--color-text-primary)]" :class="!isDesktopView ? 'pt-2' : ''">
+    <section class="glass-panel rounded-xl p-4">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <h2 class="text-xl font-bold tracking-wide">{{ selectedStock.name }}</h2>
+            <MarketBadge :market="selectedStock.market" />
+            <span class="text-xs text-slate-500 font-mono">{{ selectedStock.thsCode }}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-3xl font-mono font-bold tracking-tight" :class="changeClass">{{ selectedStock.price.toFixed(2) }}</span>
+            <PriceChangeTag :value="selectedStock.change" class-name="text-sm px-2 py-0.5" />
+            <span class="px-2 py-0.5 text-xs rounded-md border" :class="riskSummary.style">Risk {{ riskSummary.level }}</span>
+          </div>
         </div>
-        <div class="flex items-baseline space-x-3">
-          <span class="text-3xl font-mono font-bold tracking-tight" :class="changeClass">
-            {{ selectedStock.price.toFixed(2) }}
-          </span>
-          <PriceChangeTag :value="selectedStock.change" class-name="text-sm px-2 py-0.5" />
+
+        <div class="flex items-center gap-2">
+          <button
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 hover:border-blue-300 hover:text-blue-700"
+            @click="copyMarkdown"
+          >
+            <Copy class="w-3.5 h-3.5" />
+            {{ isCopied ? "Copied" : "Copy Report" }}
+          </button>
+          <button
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 hover:border-blue-300 hover:text-blue-700"
+            @click="downloadMarkdown"
+          >
+            <Download class="w-3.5 h-3.5" />
+            Download MD
+          </button>
         </div>
       </div>
 
-      <div class="px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-full text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(234,179,8,0.2)]">
-        核心标的
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div class="text-[11px] text-slate-500">Pool Rank</div>
+          <div class="text-base font-semibold mt-0.5">{{ stockRank }}</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div class="text-[11px] text-slate-500">PE</div>
+          <div class="text-base font-semibold mt-0.5">{{ selectedStock.pe.toFixed(1) }}</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div class="text-[11px] text-slate-500">Profit YoY</div>
+          <div class="text-base font-semibold mt-0.5" :class="selectedStock.profitGrowth >= 0 ? 'text-[var(--color-up)]' : 'text-[var(--color-down)]'">
+            {{ selectedStock.profitGrowth.toFixed(2) }}%
+          </div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div class="text-[11px] text-slate-500">ROE</div>
+          <div class="text-base font-semibold mt-0.5">{{ selectedStock.roe.toFixed(2) }}%</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+          <div class="text-[11px] text-slate-500">Report Size</div>
+          <div class="text-base font-semibold mt-0.5">{{ reportWordCount }}</div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <MarkdownReport :content="finalReport" />
+    <section class="mt-3 rounded-xl border border-slate-200 bg-white p-1">
+      <div class="flex items-center gap-1">
+        <button
+          class="flex-1 rounded-lg px-3 py-2 text-sm"
+          :class="activeTab === 'report' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
+          @click="activeTab = 'report'"
+        >
+          Report
+        </button>
+        <button
+          class="flex-1 rounded-lg px-3 py-2 text-sm"
+          :class="activeTab === 'risk' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
+          @click="activeTab = 'risk'"
+        >
+          Risk
+        </button>
+        <button
+          class="flex-1 rounded-lg px-3 py-2 text-sm"
+          :class="activeTab === 'factors' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
+          @click="activeTab = 'factors'"
+        >
+          Factors
+        </button>
+      </div>
+    </section>
 
-    <div
-      v-if="riskAssessment"
-      class="mt-6 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5 text-xs text-yellow-200 leading-relaxed"
-    >
-      <strong class="text-yellow-400">风险摘要：</strong>{{ riskAssessment }}
-    </div>
+    <section class="mt-3 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+      <div v-if="activeTab === 'report'" class="glass-panel rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3 text-xs text-[var(--color-text-secondary)]">
+          <span class="inline-flex items-center gap-1"><Sparkles class="w-3.5 h-3.5 text-blue-600" /> AI generated content</span>
+          <span v-if="reportUpdatedAt">Updated {{ reportUpdatedAt.toLocaleString() }}</span>
+        </div>
+        <MarkdownReport :content="finalReport" />
+      </div>
 
-    <div class="mt-8 pt-4 border-t border-[var(--color-surface-border)] text-xs text-[var(--color-text-secondary)] text-center opacity-60">
-      <p>本研报由 AI Quant Screener 自动生成，仅供参考，不构成投资建议。</p>
-      <p>市场有风险，投资需谨慎。</p>
+      <div v-else-if="activeTab === 'risk'" class="glass-panel rounded-xl p-4 space-y-3">
+        <div class="flex items-center gap-2 text-[var(--color-text-primary)]">
+          <ShieldAlert class="w-4 h-4 text-amber-600" />
+          <h3 class="text-sm font-semibold">Portfolio Risk Summary</h3>
+        </div>
+        <p class="text-sm leading-7 text-[var(--color-text-secondary)]">
+          {{ riskAssessment || "No risk assessment yet. Please run a screener query first." }}
+        </p>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 leading-6">
+          <p>Position suggestion: {{ riskSummary.level === "High" ? "Target total exposure <= 40%" : riskSummary.level === "Medium" ? "Scale in gradually, target 40%-65%" : "Can increase exposure to around 70% with discipline" }}</p>
+          <p>Stop loss discipline: consider reducing when single-name loss approaches 8%.</p>
+          <p>Diversification: keep 5-8 names and avoid single-sector concentration.</p>
+        </div>
+      </div>
+
+      <div v-else class="glass-panel rounded-xl p-4">
+        <h3 class="text-sm font-semibold mb-3">Factor Breakdown</h3>
+        <div class="space-y-2">
+          <div v-for="factor in keyFactors" :key="factor.label" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-500">{{ factor.label }}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600">{{ factor.status }}</span>
+            </div>
+            <p class="mt-1 text-sm font-semibold">{{ factor.value }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="mt-3 text-xs text-[var(--color-text-secondary)] text-center">
+      AI generated content for research only, not financial advice.
     </div>
   </div>
 </template>

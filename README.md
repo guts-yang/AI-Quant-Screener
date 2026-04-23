@@ -10,6 +10,7 @@ AI Quant Screener 是一个前后端一体的量化选股原型系统：
 2. 四智能体流水线执行：Data -> Quant -> MacroRisk -> CIO。
 3. 支持实时流式状态（SSE）与非流式兜底接口。
 4. 输出结构化股票池 + Markdown 研报。
+5. 浅色主题前端，股票池/研报/我的页面具备完整桌面端交互能力。
 
 ## 系统流程图
 ```mermaid
@@ -80,9 +81,20 @@ npm run dev
 | `IFIND_REFRESH_TOKEN` | iFinD 刷新令牌 | 生产建议必填 |
 | `IFIND_ACCESS_TOKEN` | 初始 access token（可选） | 否 |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | 建议填写 |
+| `DEEPSEEK_BASE_URL` | DeepSeek API 基础地址 | 默认值可用 |
+| `DEEPSEEK_HTTP_TIMEOUT_SECONDS` | DeepSeek 请求超时 | 否 |
+| `ENABLE_TUSHARE` | 是否启用 Tushare（`0/1`） | 否 |
+| `TUSHARE_TOKEN` | Tushare Token | 按需 |
+| `TUSHARE_BASE_URL` | Tushare API 地址 | 默认值可用 |
+| `TUSHARE_HTTP_TIMEOUT_SECONDS` | Tushare 请求超时 | 否 |
+| `ENABLE_TICKFLOW` | 是否启用 TickFlow（`0/1`） | 否 |
+| `TICKFLOW_API_KEY` | TickFlow API Key | 按需 |
+| `TICKFLOW_BASE_URL` | TickFlow API 地址 | 默认值可用 |
+| `TICKFLOW_HTTP_TIMEOUT_SECONDS` | TickFlow 请求超时 | 否 |
 | `VITE_API_BASE_URL` | 前端后端基地址 | 默认 `http://127.0.0.1:8006` |
 
 说明：未配置真实 Key 时，系统会自动返回可联调的 mock/fallback 数据。
+说明：`/api/v1/config/data-sources` 会返回当前 iFinD/DeepSeek/Tushare/TickFlow 的启用与配置状态（不暴露密钥内容）。
 
 ## API 说明
 
@@ -91,6 +103,7 @@ npm run dev
 | `POST` | `/api/v1/screener/run` | 非流式执行选股工作流 |
 | `GET` | `/api/v1/screener/stream` | SSE 流式返回 Agent 状态与结果 |
 | `GET` | `/api/v1/health` | 健康检查 |
+| `GET` | `/api/v1/config/data-sources` | 返回数据源启用与配置状态 |
 
 ### 请求示例
 ```bash
@@ -104,6 +117,7 @@ curl -X POST "http://127.0.0.1:8006/api/v1/screener/run" \
 2. SSE 异常时自动回退到 `/api/v1/screener/run`。
 3. 若后端地址不是本机 `8006` 端口，请在前端设置 `VITE_API_BASE_URL`。
 4. 聊天页会实时展示各 Agent 状态，并在收到 `CIOAgent` 的 `think` 字段时显示推理过程面板。
+5. `我的` 页可直接查看后端健康状态和多数据源配置状态（iFinD/DeepSeek/Tushare/TickFlow）。
 
 ## 测试
 

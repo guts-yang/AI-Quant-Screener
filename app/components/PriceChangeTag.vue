@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from "vue";
 
 const props = withDefaults(
@@ -22,13 +22,12 @@ const displayValue = computed(() => {
 
 <template>
   <span
-    class="font-mono rounded px-2 py-0.5 inline-flex items-center justify-center font-bold"
+    class="font-mono rounded px-2 py-0.5 inline-flex items-center justify-center font-bold border"
     :class="[
-      isUp ? 'bg-[#3A1015] text-[var(--color-up)]' : 'bg-[#0A291A] text-[var(--color-down)]',
+      isUp ? 'bg-[var(--color-up-bg)] text-[var(--color-up)] border-red-200' : 'bg-[var(--color-down-bg)] text-[var(--color-down)] border-green-200',
       className,
     ]"
   >
     {{ displayValue }}
   </span>
 </template>
-

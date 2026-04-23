@@ -34,6 +34,7 @@ except Exception:
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+DEEPSEEK_HTTP_TIMEOUT_SECONDS = int(os.getenv("DEEPSEEK_HTTP_TIMEOUT_SECONDS", "60"))
 
 
 class WorkflowState(TypedDict):
@@ -89,7 +90,12 @@ def _deepseek_chat(
         "Content-Type": "application/json",
     }
 
-    response = requests.post(url, json=payload, headers=headers, timeout=60)
+    response = requests.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=DEEPSEEK_HTTP_TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
     data = response.json()
     message = data.get("choices", [{}])[0].get("message", {})
@@ -147,6 +153,18 @@ def _pick_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None
         if cand.lower() in lower_map:
             return lower_map[cand.lower()]
     return None
+
+
+def _safe_dataframe_to_markdown(df: pd.DataFrame) -> str:
+    """Best-effort table serialization for LLM prompt context.
+
+    Pandas `to_markdown` depends on optional package `tabulate`.
+    If unavailable, fallback to a plain-text table so workflow won't fail.
+    """
+    try:
+        return df.to_markdown(index=False)
+    except Exception:
+        return df.to_string(index=False)
 
 
 class AgentWorkflow:
@@ -294,7 +312,7 @@ class AgentWorkflow:
             _emit(self._event_callback, "CIOAgent", "done", "CIO Agent 已完成空池报告。")
             return {"final_report": markdown}
 
-        table_md = df.head(10).to_markdown(index=False)
+        table_md = _safe_dataframe_to_markdown(df.head(10))
         prompt = (
             "请基于候选股票和风险评估，输出 Markdown 投研报告。结构包含：\n"
             "1) 执行摘要\n2) 入选标的点评\n3) 风险控制与仓位建议\n4) 结论\n\n"
