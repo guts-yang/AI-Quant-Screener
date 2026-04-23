@@ -12,6 +12,7 @@ const {
   runScreener,
   stopScreener,
   streamMessage,
+  cioThinking,
 } = useAppStore();
 
 const input = ref("");
@@ -75,6 +76,13 @@ onBeforeUnmount(() => {
         <AgentStatusPill name="CIO" :status="agentStatuses.cio" />
       </div>
       <p v-if="streamMessage" class="mt-2 text-xs text-[var(--color-text-secondary)]">{{ streamMessage }}</p>
+      <div
+        v-if="cioThinking"
+        class="mt-2 rounded-md border border-blue-500/20 bg-blue-500/5 p-2 text-[11px] leading-5 text-blue-200"
+      >
+        <div class="font-semibold text-blue-300 mb-1">CIO 推理过程（SSE）</div>
+        <pre class="whitespace-pre-wrap break-words font-sans">{{ cioThinking }}</pre>
+      </div>
     </div>
 
     <div ref="scrollRef" class="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">

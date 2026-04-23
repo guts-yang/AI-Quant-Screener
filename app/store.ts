@@ -57,7 +57,7 @@ interface State {
   streamMessage: string;
 }
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:8000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:8006";
 
 const state = reactive<State>({
   stocks: [],
@@ -178,6 +178,13 @@ const mapAgentName = (agent?: string): AgentName | null => {
   return null;
 };
 
+const extractThinkContent = (raw: string) => {
+  const text = raw.trim();
+  if (!text) return "";
+  const match = text.match(/<think>([\s\S]*?)<\/think>/i);
+  return match ? match[1].trim() : text;
+};
+
 const applyResult = (payload: ScreenerRunResponse | StreamEvent) => {
   const rows = (payload.stock_pool ?? []) as Record<string, unknown>[];
   const mapped = rows.map(mapStockRow);
@@ -242,7 +249,7 @@ const runScreenerWithStream = (query: string) =>
           state.streamMessage = payload.message;
         }
         if (payload.think) {
-          state.cioThinking = payload.think;
+          state.cioThinking = extractThinkContent(payload.think);
         }
         return;
       }

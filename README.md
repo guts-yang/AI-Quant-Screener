@@ -62,7 +62,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 python init_db.py
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8006
 ```
 
 ### 2) 启动前端
@@ -70,6 +70,7 @@ uvicorn backend.main:app --reload --port 8000
 npm install
 npm run dev
 ```
+默认前端地址：`http://127.0.0.1:5176`
 
 ## 环境变量
 复制 `.env.example` 为 `.env` 后按需配置。
@@ -79,7 +80,7 @@ npm run dev
 | `IFIND_REFRESH_TOKEN` | iFinD 刷新令牌 | 生产建议必填 |
 | `IFIND_ACCESS_TOKEN` | 初始 access token（可选） | 否 |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | 建议填写 |
-| `VITE_API_BASE_URL` | 前端后端基地址 | 默认 `http://127.0.0.1:8000` |
+| `VITE_API_BASE_URL` | 前端后端基地址 | 默认 `http://127.0.0.1:8006` |
 
 说明：未配置真实 Key 时，系统会自动返回可联调的 mock/fallback 数据。
 
@@ -93,7 +94,7 @@ npm run dev
 
 ### 请求示例
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/v1/screener/run" \
+curl -X POST "http://127.0.0.1:8006/api/v1/screener/run" \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"筛选低估值且净利润增长为正的主板股票\"}"
 ```
@@ -101,7 +102,35 @@ curl -X POST "http://127.0.0.1:8000/api/v1/screener/run" \
 ## 联调说明
 1. 前端默认优先走 SSE 接口 `/api/v1/screener/stream`。
 2. SSE 异常时自动回退到 `/api/v1/screener/run`。
-3. 若后端地址不是本机 `8000` 端口，请在前端设置 `VITE_API_BASE_URL`。
+3. 若后端地址不是本机 `8006` 端口，请在前端设置 `VITE_API_BASE_URL`。
+4. 聊天页会实时展示各 Agent 状态，并在收到 `CIOAgent` 的 `think` 字段时显示推理过程面板。
+
+## 测试
+
+### 安装测试依赖
+```bash
+pip install -r requirements-dev.txt
+```
+
+### 运行后端单元测试 + Mock E2E
+```bash
+python -m pytest -q
+```
+或
+```bash
+npm run test:backend
+```
+
+### 运行真实 API 的 Live E2E（可选）
+当你已配置真实 iFinD / DeepSeek 环境变量时：
+```bash
+RUN_LIVE_E2E=1 python -m pytest -q tests/test_api_live_e2e.py
+```
+Windows PowerShell：
+```powershell
+$env:RUN_LIVE_E2E = "1"
+python -m pytest -q tests/test_api_live_e2e.py
+```
 
 ## 开发建议
 1. 优先保证 `init_db.py` 成功执行后再启动后端。

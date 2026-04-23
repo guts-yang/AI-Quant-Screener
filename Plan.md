@@ -32,8 +32,15 @@
 2. 修复前端乱码与语法问题
 3. 桌面/移动端布局保持一致
 
+## Phase 5: 测试与联调增强
+状态: 已完成
+1. 新增后端单元测试（`tests/test_ifind_client_unit.py`、`tests/test_agent_workflow_unit.py`）
+2. 新增接口 E2E 测试（`tests/test_api_e2e.py`）
+3. 新增可选真实 API Live E2E（`tests/test_api_live_e2e.py`，通过 `RUN_LIVE_E2E=1` 启用）
+4. 前端 SSE 状态展示增强：实时显示 Agent 状态与 CIO 推理过程（`think`）
+
 ## 下一步迭代建议
 1. 接入真实 iFinD 返回字段规范（替换当前兼容解析）
 2. 配置真实 DeepSeek Key 并接入更细粒度推理流
-3. 增加后端单元测试与接口 E2E 测试
-4. 前后端联调 SSE 实时状态展示
+3. 将 FastAPI `on_event` 迁移到 lifespan（消除弃用警告）
+4. 为关键服务补充超时重试与指标监控
