@@ -19,7 +19,7 @@ const props = withDefaults(
 type TabKey = "report" | "risk" | "factors";
 
 const router = useRouter();
-const { selectedStock, finalReport, riskAssessment, stocks } = useAppStore();
+const { selectedStock, finalReport, riskAssessment, factorSummary, stocks } = useAppStore();
 const isDesktopView = computed(() => {
   if (typeof props.isDesktop === "boolean") return props.isDesktop;
   if (typeof window === "undefined") return true;
@@ -63,6 +63,8 @@ const riskSummary = computed(() => {
   if (selectedStock.value.profitGrowth < 0) score += 3;
   if (selectedStock.value.revGrowth < 0) score += 2;
   if (selectedStock.value.change < -3) score += 1;
+  if (selectedStock.value.idiosyncraticVol > 0.3) score += 2;
+  if (selectedStock.value.ffScore < 50) score += 2;
 
   if (score >= 5) return { level: "High", style: "text-red-700 bg-red-50 border-red-200" };
   if (score >= 3) return { level: "Medium", style: "text-amber-700 bg-amber-50 border-amber-200" };
@@ -73,25 +75,46 @@ const keyFactors = computed(() => {
   if (!selectedStock.value) return [];
   return [
     {
-      label: "Valuation (PE)",
-      value: selectedStock.value.pe.toFixed(1),
-      status: selectedStock.value.pe <= 30 ? "Reasonable" : "Elevated",
+      label: "FF5 Composite Score",
+      value: selectedStock.value.ffScore.toFixed(1),
+      status: selectedStock.value.ffScore >= 70 ? "Strong" : selectedStock.value.ffScore >= 55 ? "Watch" : "Weak",
     },
     {
-      label: "Net Profit Growth",
-      value: `${selectedStock.value.profitGrowth.toFixed(2)}%`,
-      status: selectedStock.value.profitGrowth > 0 ? "Improving" : "Weak",
+      label: "Alpha Proxy",
+      value: selectedStock.value.alpha.toFixed(4),
+      status: selectedStock.value.alpha > 0 ? "Positive" : "Negative",
     },
     {
-      label: "Revenue Growth",
-      value: `${selectedStock.value.revGrowth.toFixed(2)}%`,
-      status: selectedStock.value.revGrowth > 0 ? "Positive" : "Slowing",
+      label: "Value / HML",
+      value: selectedStock.value.bookToMarket.toFixed(3),
+      status: selectedStock.value.betaHml > 0 ? "Value Tilt" : "Growth Tilt",
     },
     {
-      label: "ROE",
-      value: `${selectedStock.value.roe.toFixed(2)}%`,
-      status: selectedStock.value.roe >= 10 ? "Solid" : "Normal",
+      label: "Profitability / RMW",
+      value: `${(selectedStock.value.operatingProfitability * 100).toFixed(2)}%`,
+      status: selectedStock.value.betaRmw > 0 ? "Robust" : "Weak",
     },
+    {
+      label: "Investment / CMA",
+      value: `${(selectedStock.value.assetGrowth * 100).toFixed(2)}%`,
+      status: selectedStock.value.betaCma > 0 ? "Conservative" : "Aggressive",
+    },
+    {
+      label: "Idiosyncratic Vol",
+      value: `${(selectedStock.value.idiosyncraticVol * 100).toFixed(2)}%`,
+      status: selectedStock.value.idiosyncraticVol <= 0.25 ? "Controlled" : "Elevated",
+    },
+  ];
+});
+
+const factorExposures = computed(() => {
+  if (!selectedStock.value) return [];
+  return [
+    { label: "MKT", value: selectedStock.value.betaMkt },
+    { label: "SMB", value: selectedStock.value.betaSmb },
+    { label: "HML", value: selectedStock.value.betaHml },
+    { label: "RMW", value: selectedStock.value.betaRmw },
+    { label: "CMA", value: selectedStock.value.betaCma },
   ];
 });
 
@@ -173,21 +196,21 @@ const goPool = () => {
       <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4">
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
           <div class="text-[11px] text-slate-500">Pool Rank</div>
-          <div class="text-base font-semibold mt-0.5">{{ stockRank }}</div>
+          <div class="text-base font-semibold mt-0.5">#{{ selectedStock.ffRank || stockRank }}</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">PE</div>
-          <div class="text-base font-semibold mt-0.5">{{ selectedStock.pe.toFixed(1) }}</div>
+          <div class="text-[11px] text-slate-500">FF5 Score</div>
+          <div class="text-base font-semibold mt-0.5 text-blue-700">{{ selectedStock.ffScore.toFixed(1) }}</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">Profit YoY</div>
-          <div class="text-base font-semibold mt-0.5" :class="selectedStock.profitGrowth >= 0 ? 'text-[var(--color-up)]' : 'text-[var(--color-down)]'">
-            {{ selectedStock.profitGrowth.toFixed(2) }}%
+          <div class="text-[11px] text-slate-500">Alpha</div>
+          <div class="text-base font-semibold mt-0.5" :class="selectedStock.alpha >= 0 ? 'text-[var(--color-up)]' : 'text-[var(--color-down)]'">
+            {{ selectedStock.alpha.toFixed(4) }}
           </div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">ROE</div>
-          <div class="text-base font-semibold mt-0.5">{{ selectedStock.roe.toFixed(2) }}%</div>
+          <div class="text-[11px] text-slate-500">Data Quality</div>
+          <div class="text-base font-semibold mt-0.5">{{ selectedStock.dataQuality.toFixed(0) }}%</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
           <div class="text-[11px] text-slate-500">Report Size</div>
@@ -239,6 +262,9 @@ const goPool = () => {
         <p class="text-sm leading-7 text-[var(--color-text-secondary)]">
           {{ riskAssessment || "No risk assessment yet. Please run a screener query first." }}
         </p>
+        <p v-if="factorSummary" class="text-xs leading-6 text-slate-500 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          {{ factorSummary }}
+        </p>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 leading-6">
           <p>Position suggestion: {{ riskSummary.level === "High" ? "Target total exposure <= 40%" : riskSummary.level === "Medium" ? "Scale in gradually, target 40%-65%" : "Can increase exposure to around 70% with discipline" }}</p>
           <p>Stop loss discipline: consider reducing when single-name loss approaches 8%.</p>
@@ -248,6 +274,12 @@ const goPool = () => {
 
       <div v-else class="glass-panel rounded-xl p-4">
         <h3 class="text-sm font-semibold mb-3">Factor Breakdown</h3>
+        <div class="grid grid-cols-5 gap-2 mb-3">
+          <div v-for="item in factorExposures" :key="item.label" class="rounded-lg border border-slate-200 bg-white p-2 text-center">
+            <div class="text-[10px] text-slate-500">{{ item.label }}</div>
+            <div class="mt-1 text-xs font-mono font-semibold" :class="item.value >= 0 ? 'text-blue-700' : 'text-slate-600'">{{ item.value.toFixed(3) }}</div>
+          </div>
+        </div>
         <div class="space-y-2">
           <div v-for="factor in keyFactors" :key="factor.label" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
             <div class="flex items-center justify-between">

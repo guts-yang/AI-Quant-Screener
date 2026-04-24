@@ -68,6 +68,10 @@ const filteredStocks = computed(() => {
         return b.change - a.change;
       case "roe_desc":
         return b.roe - a.roe;
+      case "ff_score_desc":
+        return b.ffScore - a.ffScore;
+      case "alpha_desc":
+        return b.alpha - a.alpha;
       case "profit_desc":
       default:
         return b.profitGrowth - a.profitGrowth;
@@ -80,10 +84,12 @@ const filteredStocks = computed(() => {
 const summary = computed(() => {
   const data = filteredStocks.value;
   const avgPe = data.length ? data.reduce((sum, item) => sum + item.pe, 0) / data.length : 0;
+  const avgScore = data.length ? data.reduce((sum, item) => sum + item.ffScore, 0) / data.length : 0;
   const avgGrowth = data.length ? data.reduce((sum, item) => sum + item.profitGrowth, 0) / data.length : 0;
   const positiveCount = data.filter((item) => item.change >= 0).length;
   return {
     avgPe,
+    avgScore,
     avgGrowth,
     positiveCount,
     total: data.length,
@@ -110,13 +116,20 @@ const clearFilters = () => {
 };
 
 const exportCsv = () => {
-  const headers = ["thsCode", "code", "name", "market", "marketType", "price", "change", "pe", "revGrowth", "profitGrowth", "roe"];
+  const headers = ["thsCode", "code", "name", "market", "marketType", "ffScore", "alpha", "betaMkt", "betaSmb", "betaHml", "betaRmw", "betaCma", "price", "change", "pe", "revGrowth", "profitGrowth", "roe"];
   const rows = filteredStocks.value.map((stock) => [
     stock.thsCode,
     stock.code,
     stock.name,
     stock.market,
     stock.marketType,
+    stock.ffScore.toFixed(2),
+    stock.alpha.toFixed(4),
+    stock.betaMkt.toFixed(3),
+    stock.betaSmb.toFixed(3),
+    stock.betaHml.toFixed(3),
+    stock.betaRmw.toFixed(3),
+    stock.betaCma.toFixed(3),
     stock.price.toFixed(2),
     stock.change.toFixed(2),
     stock.pe.toFixed(2),
@@ -199,6 +212,8 @@ watch(
           <span class="text-[11px] text-[var(--color-text-secondary)]">排序</span>
           <select v-model="sortBy" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs">
             <option value="profit_desc">净利增长率 ↓</option>
+            <option value="ff_score_desc">五因子评分 ↓</option>
+            <option value="alpha_desc">Alpha ↓</option>
             <option value="roe_desc">ROE ↓</option>
             <option value="change_desc">涨跌幅 ↓</option>
             <option value="pe_asc">PE ↑</option>
@@ -230,8 +245,8 @@ watch(
         <div class="mt-1 text-xl font-bold">{{ summary.total }}</div>
       </div>
       <div class="glass-panel rounded-xl p-3">
-        <div class="text-[11px] text-[var(--color-text-secondary)]">平均 PE</div>
-        <div class="mt-1 text-xl font-bold">{{ summary.avgPe.toFixed(1) }}</div>
+        <div class="text-[11px] text-[var(--color-text-secondary)]">平均五因子分</div>
+        <div class="mt-1 text-xl font-bold">{{ summary.avgScore.toFixed(1) }}</div>
       </div>
       <div class="glass-panel rounded-xl p-3">
         <div class="text-[11px] text-[var(--color-text-secondary)]">平均净利增长</div>
@@ -251,6 +266,8 @@ watch(
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)]">代码</th>
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)]">简称</th>
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)]">板块</th>
+            <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)] text-right">FF5</th>
+            <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)] text-right">Alpha</th>
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)] text-right">最新价</th>
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)] text-right">涨跌幅</th>
             <th class="px-3 py-3 font-medium text-[var(--color-text-secondary)] text-right">PE</th>
@@ -279,6 +296,8 @@ watch(
             </td>
             <td class="px-3 py-2 font-medium text-slate-800">{{ stock.name }}</td>
             <td class="px-3 py-2 text-slate-500">{{ stock.marketType }}</td>
+            <td class="px-3 py-2 text-right font-mono font-semibold text-blue-700">{{ stock.ffScore.toFixed(1) }}</td>
+            <td class="px-3 py-2 text-right font-mono" :class="growthClass(stock.alpha)">{{ stock.alpha.toFixed(3) }}</td>
             <td class="px-3 py-2 text-right font-mono font-semibold text-slate-800">{{ stock.price.toFixed(2) }}</td>
             <td class="px-3 py-2 text-right">
               <PriceChangeTag :value="stock.change" />
@@ -335,6 +354,7 @@ watch(
           <span class="font-mono text-slate-500 text-xs tracking-wider">{{ stock.thsCode }}</span>
         </div>
         <div class="text-right">
+          <div class="text-xs text-slate-500 mb-1">FF5 {{ stock.ffScore.toFixed(1) }}</div>
           <div class="text-2xl font-mono font-bold tracking-tight" :class="growthClass(stock.change)">
             {{ stock.price.toFixed(2) }}
           </div>
@@ -344,8 +364,8 @@ watch(
 
       <div class="grid grid-cols-4 gap-2 mb-4">
         <div class="flex flex-col items-center justify-center bg-slate-50 rounded p-1.5 border border-slate-200">
-          <span class="text-[10px] text-slate-500 uppercase tracking-tight mb-1">PE</span>
-          <span class="text-xs font-mono font-semibold text-slate-700">{{ stock.pe.toFixed(1) }}</span>
+          <span class="text-[10px] text-slate-500 uppercase tracking-tight mb-1">Alpha</span>
+          <span class="text-xs font-mono font-semibold" :class="growthClass(stock.alpha)">{{ stock.alpha.toFixed(3) }}</span>
         </div>
         <div class="flex flex-col items-center justify-center bg-slate-50 rounded p-1.5 border border-slate-200">
           <span class="text-[10px] text-slate-500 uppercase tracking-tight mb-1">营收同比</span>

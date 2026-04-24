@@ -71,9 +71,10 @@ onBeforeUnmount(() => {
       <div class="text-xs text-[var(--color-text-secondary)] font-medium mb-2 uppercase tracking-wider">Agents Workflow</div>
       <div class="grid grid-cols-2 gap-2">
         <AgentStatusPill name="Data" :status="agentStatuses.data" />
+        <AgentStatusPill name="FF5" :status="agentStatuses.factor" />
         <AgentStatusPill name="Quant" :status="agentStatuses.quant" />
         <AgentStatusPill name="Risk" :status="agentStatuses.risk" />
-        <AgentStatusPill name="CIO" :status="agentStatuses.cio" />
+        <AgentStatusPill name="CIO" :status="agentStatuses.cio" class="col-span-2" />
       </div>
       <p v-if="streamMessage" class="mt-2 text-xs text-[var(--color-text-secondary)]">{{ streamMessage }}</p>
       <div

@@ -2,7 +2,8 @@
 
 import os
 import threading
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from typing import Any, Iterable
 
 import pandas as pd
@@ -20,6 +21,10 @@ CACHE_TTL_HOURS = int(os.getenv("FINANCIAL_CACHE_TTL_HOURS", "24"))
 HTTP_TIMEOUT_SECONDS = int(os.getenv("IFIND_HTTP_TIMEOUT_SECONDS", "20"))
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class TokenManager:
     """Singleton token manager for iFinD access token refresh."""
 
@@ -35,7 +40,7 @@ class TokenManager:
     @staticmethod
     def _is_valid(expire_time: datetime) -> bool:
         # Leave a 60-second safety buffer.
-        return expire_time > datetime.utcnow() + timedelta(seconds=60)
+        return expire_time > _utc_now() + timedelta(seconds=60)
 
     def _get_latest_token(self, db: Session) -> ApiTokens | None:
         stmt = select(ApiTokens).order_by(desc(ApiTokens.id)).limit(1)
@@ -65,7 +70,7 @@ class TokenManager:
         if not access_token:
             raise RuntimeError(f"Token refresh response missing access_token: {payload}")
 
-        expire_time = datetime.utcnow() + timedelta(seconds=expires_in)
+        expire_time = _utc_now() + timedelta(seconds=expires_in)
 
         if current:
             current.access_token = access_token
@@ -97,7 +102,7 @@ class TokenManager:
                 token_row = ApiTokens(
                     access_token=env_access,
                     refresh_token=env_refresh,
-                    expire_time=datetime.utcnow() + timedelta(seconds=env_expire_seconds),
+                    expire_time=_utc_now() + timedelta(seconds=env_expire_seconds),
                 )
                 session.add(token_row)
                 session.commit()
@@ -152,10 +157,10 @@ def _build_cache_dataframe(rows: list[FinancialData]) -> pd.DataFrame:
 
 
 def _generate_mock_records(codes: list[str], indicators: list[str]) -> list[dict[str, Any]]:
-    now = datetime.utcnow()
+    now = _utc_now()
     records: list[dict[str, Any]] = []
     for code in codes:
-        base = abs(hash(code)) % 100
+        base = int(sha256(code.encode("utf-8")).hexdigest()[:8], 16) % 100
         for idx, indicator in enumerate(indicators):
             value = round((base + idx * 7) / 3.0, 4)
             records.append(
@@ -183,7 +188,7 @@ def _parse_api_payload(payload: dict[str, Any], codes: list[str], indicators: li
             report_date_raw = item.get("report_date") or item.get("trade_date")
             report_date = pd.to_datetime(report_date_raw, errors="coerce")
             if pd.isna(report_date):
-                report_date = pd.Timestamp.utcnow()
+                report_date = pd.Timestamp(_utc_now())
 
             for indicator in indicators:
                 value = item.get(indicator)
@@ -210,7 +215,7 @@ def _parse_api_payload(payload: dict[str, Any], codes: list[str], indicators: li
 
 
 def _upsert_financial_data(db: Session, records: list[dict[str, Any]]) -> None:
-    now = datetime.utcnow()
+    now = _utc_now()
     for rec in records:
         code = rec["ths_code"]
         indicator = rec["indicator_name"]
@@ -261,7 +266,7 @@ def fetch_basic_data(
     try:
         fresh_rows: list[FinancialData] = []
         cache_hit = True
-        cutoff = datetime.utcnow() - timedelta(hours=CACHE_TTL_HOURS)
+        cutoff = _utc_now() - timedelta(hours=CACHE_TTL_HOURS)
 
         if not force_refresh:
             for code in norm_codes:

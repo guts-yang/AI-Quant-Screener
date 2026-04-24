@@ -14,6 +14,19 @@ export interface Stock {
   revGrowth: number;
   profitGrowth: number;
   roe: number;
+  ffScore: number;
+  ffRank: number;
+  alpha: number;
+  betaMkt: number;
+  betaSmb: number;
+  betaHml: number;
+  betaRmw: number;
+  betaCma: number;
+  bookToMarket: number;
+  operatingProfitability: number;
+  assetGrowth: number;
+  idiosyncraticVol: number;
+  dataQuality: number;
 }
 
 export interface ChatMessage {
@@ -25,23 +38,25 @@ export interface ChatMessage {
 }
 
 export type AgentStatusType = "idle" | "loading" | "success";
-export type AgentName = "data" | "quant" | "risk" | "cio";
+export type AgentName = "data" | "factor" | "quant" | "risk" | "cio";
 
 interface ScreenerRunResponse {
   stock_pool: Record<string, unknown>[];
   final_report: string;
   risk_assessment: string;
+  factor_summary?: string;
 }
 
 interface StreamEvent {
   type: "progress" | "result" | "error" | "done";
-  agent?: "DataAgent" | "QuantAgent" | "MacroRiskAgent" | "CIOAgent";
+  agent?: "DataAgent" | "FactorModelAgent" | "QuantAgent" | "MacroRiskAgent" | "CIOAgent";
   status?: "running" | "done";
   message?: string;
   think?: string;
   stock_pool?: Record<string, unknown>[];
   final_report?: string;
   risk_assessment?: string;
+  factor_summary?: string;
 }
 
 interface State {
@@ -53,6 +68,7 @@ interface State {
   isRunning: boolean;
   finalReport: string;
   riskAssessment: string;
+  factorSummary: string;
   cioThinking: string;
   streamMessage: string;
 }
@@ -72,6 +88,7 @@ const state = reactive<State>({
   ],
   agentStatuses: {
     data: "idle",
+    factor: "idle",
     quant: "idle",
     risk: "idle",
     cio: "idle",
@@ -80,6 +97,7 @@ const state = reactive<State>({
   isRunning: false,
   finalReport: "",
   riskAssessment: "",
+  factorSummary: "",
   cioThinking: "",
   streamMessage: "",
 });
@@ -120,6 +138,19 @@ const mapStockRow = (row: Record<string, unknown>, index: number): Stock => {
     seededNumber(`${code}-revenue`, -5, 35),
   );
   const roe = toNumber(row.roe ?? row["ROE"], seededNumber(`${code}-roe`, 6, 28));
+  const ffScore = toNumber(row.ff_score, seededNumber(`${code}-ff-score`, 35, 85));
+  const ffRank = Math.round(toNumber(row.ff_rank, index + 1));
+  const alpha = toNumber(row.alpha, seededNumber(`${code}-alpha`, -0.8, 0.8));
+  const betaMkt = toNumber(row.beta_mkt, seededNumber(`${code}-beta-mkt`, 0.65, 1.25));
+  const betaSmb = toNumber(row.beta_smb, seededNumber(`${code}-beta-smb`, -1.2, 1.2));
+  const betaHml = toNumber(row.beta_hml, seededNumber(`${code}-beta-hml`, -1.2, 1.2));
+  const betaRmw = toNumber(row.beta_rmw, seededNumber(`${code}-beta-rmw`, -1.2, 1.2));
+  const betaCma = toNumber(row.beta_cma, seededNumber(`${code}-beta-cma`, -1.2, 1.2));
+  const bookToMarket = toNumber(row.book_to_market, seededNumber(`${code}-bm`, 0.2, 1.6));
+  const operatingProfitability = toNumber(row.operating_profitability, seededNumber(`${code}-op`, 0.04, 0.28));
+  const assetGrowth = toNumber(row.asset_growth, seededNumber(`${code}-inv`, -0.05, 0.35));
+  const idiosyncraticVol = toNumber(row.idiosyncratic_vol, seededNumber(`${code}-idio`, 0.08, 0.35));
+  const dataQuality = toNumber(row.data_quality, 100);
 
   const price = toNumber(row.close_price ?? row.price, seededNumber(`${code}-price`, 12, 420));
   const change = toNumber(row.change_pct ?? row.change, seededNumber(`${code}-change`, -4.5, 5.5));
@@ -136,6 +167,19 @@ const mapStockRow = (row: Record<string, unknown>, index: number): Stock => {
     revGrowth,
     profitGrowth,
     roe,
+    ffScore,
+    ffRank,
+    alpha,
+    betaMkt,
+    betaSmb,
+    betaHml,
+    betaRmw,
+    betaCma,
+    bookToMarket,
+    operatingProfitability,
+    assetGrowth,
+    idiosyncraticVol,
+    dataQuality,
   };
 };
 
@@ -158,6 +202,7 @@ const setAgentStatus = (agent: AgentName, status: AgentStatusType) => {
 const resetAgentStatuses = () => {
   state.agentStatuses = {
     data: "idle",
+    factor: "idle",
     quant: "idle",
     risk: "idle",
     cio: "idle",
@@ -172,6 +217,7 @@ const markAllAgents = (status: AgentStatusType) => {
 
 const mapAgentName = (agent?: string): AgentName | null => {
   if (agent === "DataAgent") return "data";
+  if (agent === "FactorModelAgent") return "factor";
   if (agent === "QuantAgent") return "quant";
   if (agent === "MacroRiskAgent") return "risk";
   if (agent === "CIOAgent") return "cio";
@@ -193,6 +239,7 @@ const applyResult = (payload: ScreenerRunResponse | StreamEvent) => {
   state.selectedStock = mapped[0] ?? null;
   state.finalReport = String(payload.final_report ?? "");
   state.riskAssessment = String(payload.risk_assessment ?? "");
+  state.factorSummary = String(payload.factor_summary ?? "");
 };
 
 const stopScreener = () => {

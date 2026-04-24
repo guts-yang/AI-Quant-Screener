@@ -3,7 +3,7 @@
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Callable, TypedDict
 
 import pandas as pd
@@ -11,6 +11,7 @@ import requests
 from sqlalchemy import select
 
 from .database import SessionLocal
+from .factor_model import compute_fama_french_scores, factor_columns_for_report
 from .ifind_client import fetch_basic_data
 from .models import StockPool
 
@@ -36,10 +37,57 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEEPSEEK_HTTP_TIMEOUT_SECONDS = int(os.getenv("DEEPSEEK_HTTP_TIMEOUT_SECONDS", "60"))
 
+DEFAULT_INDICATORS = ["pe_ttm", "net_profit_growth", "roe"]
+FAMA_FRENCH_INDICATORS = [
+    "pe_ttm",
+    "net_profit_growth",
+    "roe",
+    "revenue_growth",
+    "market_cap",
+    "float_market_cap",
+    "book_value",
+    "total_assets",
+    "total_assets_prev",
+    "operating_profit",
+    "change_pct",
+]
+ALLOWED_INDICATORS = {
+    *FAMA_FRENCH_INDICATORS,
+    "pe",
+    "profit_growth",
+    "rev_growth",
+    "net_assets",
+    "shareholders_equity",
+    "operating_income",
+    "ebit",
+    "close_price",
+    "price",
+}
+INDICATOR_ALIASES = {
+    "市盈率": "pe_ttm",
+    "净利润增长率": "net_profit_growth",
+    "净利增长率": "net_profit_growth",
+    "净利同比": "net_profit_growth",
+    "营收同比": "revenue_growth",
+    "营业收入增长率": "revenue_growth",
+    "总市值": "market_cap",
+    "流通市值": "float_market_cap",
+    "净资产": "book_value",
+    "股东权益": "book_value",
+    "总资产": "total_assets",
+    "经营利润": "operating_profit",
+    "涨跌幅": "change_pct",
+}
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
 
 class WorkflowState(TypedDict):
     user_query: str
     stock_pool: pd.DataFrame
+    factor_summary: str
     risk_assessment: str
     final_report: str
 
@@ -62,7 +110,7 @@ def _emit(callback: EventCallback | None, agent: str, status: str, message: str,
             "status": status,
             "message": message,
             "think": think,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utc_now().isoformat(),
         }
     )
 
@@ -117,6 +165,25 @@ def _extract_json_list(text: str) -> list[str]:
     # fallback: parse comma-separated
     text = text.replace("\n", ",")
     return [part.strip().strip('"') for part in text.split(",") if part.strip()]
+
+
+def _sanitize_indicators(raw_indicators: list[str], user_query: str) -> list[str]:
+    query = user_query.lower()
+    wants_five_factor = any(token in query for token in ["fama", "french", "五因子", "五因素", "ff5", "ff-5"])
+
+    sanitized: list[str] = []
+    for raw in raw_indicators:
+        indicator = str(raw).strip()
+        indicator = INDICATOR_ALIASES.get(indicator, indicator)
+        if indicator in ALLOWED_INDICATORS and indicator not in sanitized:
+            sanitized.append(indicator)
+
+    base_indicators = FAMA_FRENCH_INDICATORS if wants_five_factor else DEFAULT_INDICATORS
+    for indicator in base_indicators:
+        if indicator not in sanitized:
+            sanitized.append(indicator)
+
+    return sanitized
 
 
 def _render_prompt(system_prompt: str, user_prompt: str) -> tuple[str, str]:
@@ -175,12 +242,14 @@ class AgentWorkflow:
     def _build_graph(self):
         workflow = StateGraph(WorkflowState)
         workflow.add_node("DataAgent", self._data_agent)
+        workflow.add_node("FactorModelAgent", self._factor_model_agent)
         workflow.add_node("QuantAgent", self._quant_agent)
         workflow.add_node("MacroRiskAgent", self._macro_risk_agent)
         workflow.add_node("CIOAgent", self._cio_agent)
 
         workflow.set_entry_point("DataAgent")
-        workflow.add_edge("DataAgent", "QuantAgent")
+        workflow.add_edge("DataAgent", "FactorModelAgent")
+        workflow.add_edge("FactorModelAgent", "QuantAgent")
         workflow.add_edge("QuantAgent", "MacroRiskAgent")
         workflow.add_edge("MacroRiskAgent", "CIOAgent")
         workflow.add_edge("CIOAgent", END)
@@ -191,6 +260,7 @@ class AgentWorkflow:
         initial_state: WorkflowState = {
             "user_query": user_query,
             "stock_pool": pd.DataFrame(),
+            "factor_summary": "",
             "risk_assessment": "",
             "final_report": "",
         }
@@ -200,6 +270,7 @@ class AgentWorkflow:
 
         # Fallback when langgraph is not installed.
         state = self._data_agent(initial_state)
+        state = self._factor_model_agent({**initial_state, **state})
         state = self._quant_agent({**initial_state, **state})
         state = self._macro_risk_agent({**initial_state, **state})
         state = self._cio_agent({**initial_state, **state})
@@ -220,12 +291,12 @@ class AgentWorkflow:
                 f"用户指令: {query}\n{indicators_prompt}",
             )
             llm_result = _deepseek_chat("deepseek-chat", system_prompt, user_prompt)
-            indicators = _extract_json_list(llm_result.content)
+            indicators = _sanitize_indicators(_extract_json_list(llm_result.content), query)
         except Exception:
             indicators = []
 
         if not indicators:
-            indicators = ["pe_ttm", "net_profit_growth", "roe"]
+            indicators = _sanitize_indicators([], query)
 
         universe_df = _load_universe()
         codes = universe_df["ths_code"].tolist() if not universe_df.empty else []
@@ -246,6 +317,19 @@ class AgentWorkflow:
             f"Data Agent 完成数据填充，共 {len(merged)} 条股票记录。",
         )
         return {"stock_pool": merged}
+
+    def _factor_model_agent(self, state: WorkflowState) -> dict[str, Any]:
+        _emit(self._event_callback, "FactorModelAgent", "running", "Factor Model Agent 正在计算 Fama-French 五因子信号...")
+
+        df = state["stock_pool"]
+        if df.empty:
+            summary = "五因子模型未运行：股票池为空。"
+            _emit(self._event_callback, "FactorModelAgent", "done", summary)
+            return {"stock_pool": df, "factor_summary": summary}
+
+        result = compute_fama_french_scores(df)
+        _emit(self._event_callback, "FactorModelAgent", "done", result.summary)
+        return {"stock_pool": result.stock_pool, "factor_summary": result.summary}
 
     def _quant_agent(self, state: WorkflowState) -> dict[str, Any]:
         _emit(self._event_callback, "QuantAgent", "running", "Quant Agent 正在执行规则过滤...")
@@ -268,6 +352,14 @@ class AgentWorkflow:
         if npg_col:
             filtered = filtered[pd.to_numeric(filtered[npg_col], errors="coerce") > 0]
 
+        score_col = _pick_existing_column(filtered, ["ff_score"])
+        quality_col = _pick_existing_column(filtered, ["data_quality"])
+        if score_col:
+            filtered = filtered[pd.to_numeric(filtered[score_col], errors="coerce") >= 45]
+            filtered = filtered.sort_values(score_col, ascending=False)
+        if quality_col:
+            filtered = filtered[pd.to_numeric(filtered[quality_col], errors="coerce") >= 60]
+
         _emit(
             self._event_callback,
             "QuantAgent",
@@ -286,9 +378,11 @@ class AgentWorkflow:
             return {"risk_assessment": risk}
 
         sample_codes = ", ".join(df["ths_code"].head(8).tolist())
+        factor_summary = state.get("factor_summary", "")
         prompt = (
             "你是宏观风控分析师。"
             f"候选股票: {sample_codes}\n"
+            f"五因子模型摘要: {factor_summary}\n"
             "请给出 4-6 句中文风险评估，包含市场情绪、流动性、行业景气、仓位建议。"
         )
         try:
@@ -306,16 +400,20 @@ class AgentWorkflow:
 
         df = state["stock_pool"]
         risk = state["risk_assessment"]
+        factor_summary = state.get("factor_summary", "")
 
         if df.empty:
             markdown = "# CIO 最终研报\n\n当前未筛选出满足条件的股票，建议继续观察市场与因子信号。"
             _emit(self._event_callback, "CIOAgent", "done", "CIO Agent 已完成空池报告。")
             return {"final_report": markdown}
 
-        table_md = _safe_dataframe_to_markdown(df.head(10))
+        report_cols = [col for col in factor_columns_for_report() if col in df.columns]
+        table_source = df[report_cols].head(10) if report_cols else df.head(10)
+        table_md = _safe_dataframe_to_markdown(table_source)
         prompt = (
             "请基于候选股票和风险评估，输出 Markdown 投研报告。结构包含：\n"
-            "1) 执行摘要\n2) 入选标的点评\n3) 风险控制与仓位建议\n4) 结论\n\n"
+            "1) 执行摘要\n2) Fama-French 五因子解释\n3) 入选标的点评\n4) 风险控制与仓位建议\n5) 结论\n\n"
+            f"五因子模型摘要:\n{factor_summary}\n\n"
             f"候选股票表:\n{table_md}\n\n"
             f"风险评估:\n{risk}"
         )
@@ -330,7 +428,9 @@ class AgentWorkflow:
             markdown = (
                 "# CIO 最终研报\n\n"
                 "## 执行摘要\n"
-                "本次策略以估值与盈利增长因子为核心，筛选出具备基本面支撑的主板标的。\n\n"
+                "本次策略引入 Fama-French 五因子框架，综合评估规模、价值、盈利能力、投资风格与市场暴露。\n\n"
+                "## 五因子模型摘要\n"
+                f"{factor_summary or '五因子代理评分已完成，建议结合真实历史回测继续验证。'}\n\n"
                 "## 风险控制\n"
                 f"{risk}\n\n"
                 "## 结论\n"

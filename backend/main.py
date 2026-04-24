@@ -6,6 +6,7 @@ import logging
 import math
 import numbers
 import threading
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -29,6 +30,7 @@ class ScreenerRunResponse(BaseModel):
     stock_pool: list[dict[str, Any]]
     final_report: str
     risk_assessment: str
+    factor_summary: str = ""
 
 
 class DataSourceStatus(BaseModel):
@@ -43,7 +45,13 @@ class DataSourcesResponse(BaseModel):
     sources: list[DataSourceStatus]
 
 
-app = FastAPI(title="AI Quant Screener Backend", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="AI Quant Screener Backend", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,11 +60,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
 
 
 @app.get("/api/v1/health")
@@ -152,6 +155,7 @@ def run_screener(payload: ScreenerRunRequest) -> ScreenerRunResponse:
                 "stock_pool": _dataframe_to_records(state),
                 "final_report": state.get("final_report", ""),
                 "risk_assessment": state.get("risk_assessment", ""),
+                "factor_summary": state.get("factor_summary", ""),
             }
         )
         # Validate JSON serializability early, then return raw JSON response.
@@ -178,6 +182,7 @@ async def stream_screener(query: str = Query(..., min_length=1)) -> StreamingRes
                 "stock_pool": _dataframe_to_records(state),
                 "final_report": state.get("final_report", ""),
                 "risk_assessment": state.get("risk_assessment", ""),
+                "factor_summary": state.get("factor_summary", ""),
             }
             loop.call_soon_threadsafe(event_queue.put_nowait, payload)
         except Exception as exc:
