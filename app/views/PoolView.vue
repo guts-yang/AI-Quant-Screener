@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { Eye, Search, Download, Star } from "lucide-vue-next";
+import { Eye, Search, Download, Star, Database, RefreshCw } from "lucide-vue-next";
 import { useAppStore } from "../store";
 import MarketBadge from "../components/MarketBadge.vue";
 import PriceChangeTag from "../components/PriceChangeTag.vue";
@@ -20,7 +20,19 @@ const isDesktopView = computed(() => {
   return window.matchMedia("(min-width: 768px)").matches;
 });
 
-const { stocks, selectedStock, setSelectedStock, openMobileSheet, isRunning } = useAppStore();
+const {
+  stocks,
+  selectedStock,
+  setSelectedStock,
+  openMobileSheet,
+  isRunning,
+  universeOptions,
+  selectedUniverse,
+  universePreviewCount,
+  setSelectedUniverse,
+  loadUniverses,
+  previewUniverse,
+} = useAppStore();
 
 const searchKeyword = ref("");
 const marketFilter = ref<"all" | "SH" | "SZ">("all");
@@ -29,6 +41,7 @@ const sortBy = ref("profit_desc");
 const minProfitGrowth = ref(-10);
 const favoritesOnly = ref(false);
 const favorites = ref<string[]>([]);
+const loadingUniverse = ref(false);
 
 const storageKey = "aqs_favorite_stocks";
 
@@ -39,6 +52,7 @@ const formatPct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}
 
 const totalStocksLabel = computed(() => `共 ${filteredStocks.value.length} 只`);
 const watchCount = computed(() => favorites.value.length);
+const selectedUniverseLabel = computed(() => universeOptions.value.find((item) => item.key === selectedUniverse.value)?.label ?? "当前股票池");
 
 const filteredStocks = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase();
@@ -148,7 +162,21 @@ const exportCsv = () => {
   URL.revokeObjectURL(url);
 };
 
-onMounted(() => {
+const refreshUniverse = async () => {
+  loadingUniverse.value = true;
+  try {
+    await previewUniverse(selectedUniverse.value);
+  } finally {
+    loadingUniverse.value = false;
+  }
+};
+
+const handleUniverseSelect = async (key: string) => {
+  setSelectedUniverse(key);
+  await refreshUniverse();
+};
+
+onMounted(async () => {
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     try {
@@ -157,6 +185,12 @@ onMounted(() => {
     } catch {
       favorites.value = [];
     }
+  }
+  try {
+    await loadUniverses();
+    await refreshUniverse();
+  } catch {
+    // 股票池预览失败时，保留已有筛选结果。
   }
 });
 
@@ -172,6 +206,34 @@ watch(
 <template>
   <div v-if="isDesktopView" class="w-full h-full flex flex-col gap-3 text-sm">
     <div class="glass-panel rounded-xl p-3 space-y-3">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-sm font-semibold text-slate-800 inline-flex items-center gap-2">
+            <Database class="w-4 h-4 text-blue-600" />
+            股票池范围
+          </div>
+          <p class="text-xs text-slate-500 mt-1">{{ selectedUniverseLabel }}，预览 {{ universePreviewCount || stocks.length }} 只成分股</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <select
+            :value="selectedUniverse"
+            class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-blue-400"
+            :disabled="isRunning || loadingUniverse"
+            @change="(event) => handleUniverseSelect((event.target as HTMLSelectElement).value)"
+          >
+            <option v-for="item in universeOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
+          </select>
+          <button
+            class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 hover:border-blue-300 inline-flex items-center gap-1"
+            :disabled="loadingUniverse"
+            @click="refreshUniverse"
+          >
+            <RefreshCw class="w-4 h-4" :class="loadingUniverse ? 'animate-spin' : ''" />
+            刷新
+          </button>
+        </div>
+      </div>
+
       <div class="flex items-center gap-2">
         <div class="flex-1 relative">
           <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -327,8 +389,25 @@ watch(
 
   <div v-else class="p-4 space-y-4 bg-[var(--color-background)] min-h-full">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-bold">今日股票池</h2>
+      <div>
+        <h2 class="text-lg font-bold">股票池</h2>
+        <p class="text-xs text-slate-500 mt-1">{{ selectedUniverseLabel }}</p>
+      </div>
       <span class="text-xs px-2 py-1 rounded bg-blue-50 border border-blue-200 text-blue-700">{{ totalStocksLabel }}</span>
+    </div>
+
+    <div class="glass-panel rounded-xl p-3 flex items-center gap-2">
+      <select
+        :value="selectedUniverse"
+        class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+        :disabled="isRunning || loadingUniverse"
+        @change="(event) => handleUniverseSelect((event.target as HTMLSelectElement).value)"
+      >
+        <option v-for="item in universeOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
+      </select>
+      <button class="p-2 rounded-lg border border-slate-200 bg-white text-blue-600" :disabled="loadingUniverse" @click="refreshUniverse">
+        <RefreshCw class="w-4 h-4" :class="loadingUniverse ? 'animate-spin' : ''" />
+      </button>
     </div>
 
     <div v-if="filteredStocks.length === 0" class="glass-panel rounded-xl p-6 text-sm text-[var(--color-text-secondary)] text-center">

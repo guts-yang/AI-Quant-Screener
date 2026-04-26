@@ -42,7 +42,7 @@ const settings = ref<UserSettings>({ ...defaults });
 const savedAt = ref<Date | null>(null);
 const saveMessage = ref("");
 const healthStatus = ref<"unknown" | "ok" | "error">("unknown");
-const healthText = ref("Not checked");
+const healthText = ref("未检查");
 const checkingHealth = ref(false);
 const dataSources = ref<DataSourceStatus[]>([]);
 const loadingSources = ref(false);
@@ -57,8 +57,8 @@ const profileStats = computed(() => {
 
   return {
     riskScore,
-    executionMode: settings.value.prioritizeSse ? "SSE First" : "HTTP Direct",
-    fallbackMode: settings.value.autoFallback ? "Fallback On" : "Fallback Off",
+    executionMode: settings.value.prioritizeSse ? "优先流式输出" : "普通接口",
+    fallbackMode: settings.value.autoFallback ? "自动降级开启" : "自动降级关闭",
   };
 });
 
@@ -76,7 +76,7 @@ const loadSettings = () => {
 const saveSettings = () => {
   localStorage.setItem(storageKey, JSON.stringify(settings.value));
   savedAt.value = new Date();
-  saveMessage.value = "Saved locally";
+  saveMessage.value = "已保存到本地";
   setTimeout(() => {
     saveMessage.value = "";
   }, 1800);
@@ -85,7 +85,7 @@ const saveSettings = () => {
 const resetSettings = () => {
   settings.value = { ...defaults };
   localStorage.setItem(storageKey, JSON.stringify(settings.value));
-  saveMessage.value = "Defaults restored";
+  saveMessage.value = "已恢复默认设置";
   setTimeout(() => {
     saveMessage.value = "";
   }, 1800);
@@ -99,10 +99,10 @@ const checkHealth = async () => {
       throw new Error(`HTTP ${res.status}`);
     }
     healthStatus.value = "ok";
-    healthText.value = "Backend reachable";
+    healthText.value = "后端可用";
   } catch {
     healthStatus.value = "error";
-    healthText.value = "Backend unavailable";
+    healthText.value = "后端不可用";
   } finally {
     checkingHealth.value = false;
   }
@@ -139,8 +139,8 @@ onMounted(async () => {
             <User class="w-6 h-6 text-blue-700" />
           </div>
           <div>
-            <h2 class="text-lg font-bold text-[var(--color-text-primary)]">Profile & Strategy</h2>
-            <p class="text-xs text-[var(--color-text-secondary)]">Local settings + backend runtime checks</p>
+            <h2 class="text-lg font-bold text-[var(--color-text-primary)]">我的设置</h2>
+            <p class="text-xs text-[var(--color-text-secondary)]">风险偏好、运行方式和数据源状态</p>
           </div>
         </div>
 
@@ -151,33 +151,33 @@ onMounted(async () => {
             @click="checkHealth"
           >
             <RefreshCw class="w-3.5 h-3.5" :class="checkingHealth ? 'animate-spin' : ''" />
-            Health Check
+            检查后端
           </button>
           <button
             class="px-3 py-2 text-xs rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1.5"
             @click="loadDataSources"
           >
             <Database class="w-3.5 h-3.5" />
-            Refresh Sources
+            刷新数据源
           </button>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mt-4">
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div class="text-[11px] text-slate-500">Risk Score</div>
+          <div class="text-[11px] text-slate-500">风险评分</div>
           <p class="mt-1 text-base font-semibold">{{ profileStats.riskScore }}</p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div class="text-[11px] text-slate-500">Execution</div>
+          <div class="text-[11px] text-slate-500">运行方式</div>
           <p class="mt-1 text-base font-semibold">{{ profileStats.executionMode }}</p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div class="text-[11px] text-slate-500">Fallback</div>
+          <div class="text-[11px] text-slate-500">降级策略</div>
           <p class="mt-1 text-base font-semibold">{{ profileStats.fallbackMode }}</p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div class="text-[11px] text-slate-500">Backend</div>
+          <div class="text-[11px] text-slate-500">后端状态</div>
           <p
             class="mt-1 text-base font-semibold"
             :class="healthStatus === 'ok' ? 'text-emerald-700' : healthStatus === 'error' ? 'text-red-700' : 'text-slate-600'"
@@ -191,39 +191,39 @@ onMounted(async () => {
     <section class="glass-panel rounded-xl p-4">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)] mb-3 inline-flex items-center gap-2">
         <Shield class="w-4 h-4 text-amber-600" />
-        Risk Controls
+        风险控制
       </h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="rounded-lg border border-slate-200 bg-white p-3">
-          <span class="text-xs text-slate-500">Risk Style</span>
+          <span class="text-xs text-slate-500">风险风格</span>
           <select v-model="settings.riskLevel" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
-            <option value="conservative">Conservative</option>
-            <option value="balanced">Balanced</option>
-            <option value="aggressive">Aggressive</option>
+            <option value="conservative">稳健</option>
+            <option value="balanced">均衡</option>
+            <option value="aggressive">进取</option>
           </select>
         </label>
 
         <label class="rounded-lg border border-slate-200 bg-white p-3">
-          <span class="text-xs text-slate-500">Rebalance Cycle</span>
+          <span class="text-xs text-slate-500">调仓周期</span>
           <select v-model="settings.rebalanceCycle" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
+            <option value="daily">每日</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
           </select>
         </label>
       </div>
 
       <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
         <label class="rounded-lg border border-slate-200 bg-white p-3">
-          <div class="text-xs text-slate-500">Max Drawdown {{ settings.maxDrawdown }}%</div>
+          <div class="text-xs text-slate-500">最大回撤 {{ settings.maxDrawdown }}%</div>
           <input v-model.number="settings.maxDrawdown" type="range" min="5" max="30" step="1" class="mt-2 w-full" />
         </label>
         <label class="rounded-lg border border-slate-200 bg-white p-3">
-          <div class="text-xs text-slate-500">Stop Loss {{ settings.stopLoss }}%</div>
+          <div class="text-xs text-slate-500">止损线 {{ settings.stopLoss }}%</div>
           <input v-model.number="settings.stopLoss" type="range" min="3" max="15" step="1" class="mt-2 w-full" />
         </label>
         <label class="rounded-lg border border-slate-200 bg-white p-3">
-          <div class="text-xs text-slate-500">Max Single Position {{ settings.maxPosition }}%</div>
+          <div class="text-xs text-slate-500">单票上限 {{ settings.maxPosition }}%</div>
           <input v-model.number="settings.maxPosition" type="range" min="5" max="40" step="1" class="mt-2 w-full" />
         </label>
       </div>
@@ -232,19 +232,19 @@ onMounted(async () => {
     <section class="glass-panel rounded-xl p-4">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)] mb-3 inline-flex items-center gap-2">
         <Bell class="w-4 h-4 text-blue-600" />
-        Runtime Preferences
+        运行偏好
       </h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <label class="rounded-lg border border-slate-200 bg-white p-3 flex items-center justify-between">
-          <span class="text-sm text-slate-700">Prefer SSE</span>
+          <span class="text-sm text-slate-700">优先流式输出</span>
           <input v-model="settings.prioritizeSse" type="checkbox" class="h-4 w-4 accent-blue-600" />
         </label>
         <label class="rounded-lg border border-slate-200 bg-white p-3 flex items-center justify-between">
-          <span class="text-sm text-slate-700">Auto fallback to /run</span>
+          <span class="text-sm text-slate-700">失败后自动降级</span>
           <input v-model="settings.autoFallback" type="checkbox" class="h-4 w-4 accent-blue-600" />
         </label>
         <label class="rounded-lg border border-slate-200 bg-white p-3 flex items-center justify-between">
-          <span class="text-sm text-slate-700">Desktop notify</span>
+          <span class="text-sm text-slate-700">桌面通知</span>
           <input v-model="settings.desktopNotice" type="checkbox" class="h-4 w-4 accent-blue-600" />
         </label>
       </div>
@@ -253,11 +253,11 @@ onMounted(async () => {
     <section class="glass-panel rounded-xl p-4">
       <h3 class="text-sm font-semibold text-[var(--color-text-primary)] mb-3 inline-flex items-center gap-2">
         <Server class="w-4 h-4 text-indigo-600" />
-        Data Source Status
+        数据源状态
       </h3>
 
-      <div v-if="loadingSources" class="text-sm text-slate-500">Loading source status...</div>
-      <div v-else-if="dataSources.length === 0" class="text-sm text-slate-500">No data source info from backend.</div>
+      <div v-if="loadingSources" class="text-sm text-slate-500">正在加载数据源状态...</div>
+      <div v-else-if="dataSources.length === 0" class="text-sm text-slate-500">后端暂未返回数据源信息。</div>
       <div v-else class="space-y-2">
         <div v-for="source in dataSources" :key="source.name" class="rounded-lg border border-slate-200 bg-white p-3">
           <div class="flex items-center justify-between gap-2">
@@ -267,14 +267,14 @@ onMounted(async () => {
             </div>
             <div class="text-right text-xs">
               <p>
-                Enabled:
-                <span :class="source.enabled ? 'text-emerald-700' : 'text-slate-500'">{{ source.enabled ? "Yes" : "No" }}</span>
+                启用：
+                <span :class="source.enabled ? 'text-emerald-700' : 'text-slate-500'">{{ source.enabled ? "是" : "否" }}</span>
               </p>
               <p>
-                Configured:
-                <span :class="source.configured ? 'text-emerald-700' : 'text-amber-700'">{{ source.configured ? "Yes" : "No" }}</span>
+                已配置：
+                <span :class="source.configured ? 'text-emerald-700' : 'text-amber-700'">{{ source.configured ? "是" : "否" }}</span>
               </p>
-              <p class="text-slate-500">Timeout: {{ source.timeout_seconds }}s</p>
+              <p class="text-slate-500">超时：{{ source.timeout_seconds }} 秒</p>
             </div>
           </div>
         </div>
@@ -283,17 +283,17 @@ onMounted(async () => {
 
     <section class="flex items-center justify-between gap-2 flex-wrap">
       <div class="text-xs text-slate-500">
-        <span v-if="savedAt">Last saved: {{ savedAt.toLocaleString() }}</span>
-        <span v-else>Settings not saved yet</span>
+        <span v-if="savedAt">上次保存：{{ savedAt.toLocaleString() }}</span>
+        <span v-else>设置尚未保存</span>
         <span v-if="saveMessage" class="ml-2 text-blue-700">{{ saveMessage }}</span>
       </div>
       <div class="flex items-center gap-2">
         <button class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 hover:border-slate-300" @click="resetSettings">
-          Reset
+          重置
         </button>
         <button class="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 inline-flex items-center gap-1.5" @click="saveSettings">
           <Save class="w-4 h-4" />
-          Save Settings
+          保存设置
         </button>
       </div>
     </section>

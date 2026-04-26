@@ -57,7 +57,7 @@ const reportWordCount = computed(() => {
 });
 
 const riskSummary = computed(() => {
-  if (!selectedStock.value) return { level: "Pending", style: "text-slate-600 bg-slate-100 border-slate-200" };
+  if (!selectedStock.value) return { level: "待评估", style: "text-slate-600 bg-slate-100 border-slate-200" };
   let score = 0;
   if (selectedStock.value.pe > 35) score += 2;
   if (selectedStock.value.profitGrowth < 0) score += 3;
@@ -66,43 +66,43 @@ const riskSummary = computed(() => {
   if (selectedStock.value.idiosyncraticVol > 0.3) score += 2;
   if (selectedStock.value.ffScore < 50) score += 2;
 
-  if (score >= 5) return { level: "High", style: "text-red-700 bg-red-50 border-red-200" };
-  if (score >= 3) return { level: "Medium", style: "text-amber-700 bg-amber-50 border-amber-200" };
-  return { level: "Low", style: "text-emerald-700 bg-emerald-50 border-emerald-200" };
+  if (score >= 5) return { level: "高", style: "text-red-700 bg-red-50 border-red-200" };
+  if (score >= 3) return { level: "中", style: "text-amber-700 bg-amber-50 border-amber-200" };
+  return { level: "低", style: "text-emerald-700 bg-emerald-50 border-emerald-200" };
 });
 
 const keyFactors = computed(() => {
   if (!selectedStock.value) return [];
   return [
     {
-      label: "FF5 Composite Score",
+      label: "五因子综合分",
       value: selectedStock.value.ffScore.toFixed(1),
-      status: selectedStock.value.ffScore >= 70 ? "Strong" : selectedStock.value.ffScore >= 55 ? "Watch" : "Weak",
+      status: selectedStock.value.ffScore >= 70 ? "较强" : selectedStock.value.ffScore >= 55 ? "观察" : "偏弱",
     },
     {
-      label: "Alpha Proxy",
+      label: "Alpha 代理信号",
       value: selectedStock.value.alpha.toFixed(4),
-      status: selectedStock.value.alpha > 0 ? "Positive" : "Negative",
+      status: selectedStock.value.alpha > 0 ? "正向" : "负向",
     },
     {
-      label: "Value / HML",
+      label: "价值因子 / HML",
       value: selectedStock.value.bookToMarket.toFixed(3),
-      status: selectedStock.value.betaHml > 0 ? "Value Tilt" : "Growth Tilt",
+      status: selectedStock.value.betaHml > 0 ? "价值倾向" : "成长倾向",
     },
     {
-      label: "Profitability / RMW",
+      label: "盈利质量 / RMW",
       value: `${(selectedStock.value.operatingProfitability * 100).toFixed(2)}%`,
-      status: selectedStock.value.betaRmw > 0 ? "Robust" : "Weak",
+      status: selectedStock.value.betaRmw > 0 ? "稳健" : "偏弱",
     },
     {
-      label: "Investment / CMA",
+      label: "投资风格 / CMA",
       value: `${(selectedStock.value.assetGrowth * 100).toFixed(2)}%`,
-      status: selectedStock.value.betaCma > 0 ? "Conservative" : "Aggressive",
+      status: selectedStock.value.betaCma > 0 ? "稳健扩张" : "激进扩张",
     },
     {
-      label: "Idiosyncratic Vol",
+      label: "特异波动",
       value: `${(selectedStock.value.idiosyncraticVol * 100).toFixed(2)}%`,
-      status: selectedStock.value.idiosyncraticVol <= 0.25 ? "Controlled" : "Elevated",
+      status: selectedStock.value.idiosyncraticVol <= 0.25 ? "可控" : "偏高",
     },
   ];
 });
@@ -154,9 +154,9 @@ const goPool = () => {
     <div class="w-14 h-14 rounded-full bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mb-4">
       <FileText class="w-6 h-6" />
     </div>
-    <p class="text-base text-[var(--color-text-primary)] font-semibold">No stock selected</p>
-    <p class="text-sm mt-2">Pick one candidate in Stock Pool to view the full AI report and risk suggestions.</p>
-    <button class="mt-5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500" @click="goPool">Open Stock Pool</button>
+    <p class="text-base text-[var(--color-text-primary)] font-semibold">还没有选择股票</p>
+    <p class="text-sm mt-2">请先在股票池中选择一个候选标的，再查看完整研报和风险建议。</p>
+    <button class="mt-5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500" @click="goPool">打开股票池</button>
   </div>
 
   <div v-else class="w-full h-full flex flex-col text-[var(--color-text-primary)]" :class="!isDesktopView ? 'pt-2' : ''">
@@ -171,7 +171,7 @@ const goPool = () => {
           <div class="flex items-center gap-3">
             <span class="text-3xl font-mono font-bold tracking-tight" :class="changeClass">{{ selectedStock.price.toFixed(2) }}</span>
             <PriceChangeTag :value="selectedStock.change" class-name="text-sm px-2 py-0.5" />
-            <span class="px-2 py-0.5 text-xs rounded-md border" :class="riskSummary.style">Risk {{ riskSummary.level }}</span>
+            <span class="px-2 py-0.5 text-xs rounded-md border" :class="riskSummary.style">风险 {{ riskSummary.level }}</span>
           </div>
         </div>
 
@@ -181,25 +181,25 @@ const goPool = () => {
             @click="copyMarkdown"
           >
             <Copy class="w-3.5 h-3.5" />
-            {{ isCopied ? "Copied" : "Copy Report" }}
+            {{ isCopied ? "已复制" : "复制研报" }}
           </button>
           <button
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 hover:border-blue-300 hover:text-blue-700"
             @click="downloadMarkdown"
           >
             <Download class="w-3.5 h-3.5" />
-            Download MD
+            下载原文
           </button>
         </div>
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4">
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">Pool Rank</div>
+          <div class="text-[11px] text-slate-500">池内排名</div>
           <div class="text-base font-semibold mt-0.5">#{{ selectedStock.ffRank || stockRank }}</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">FF5 Score</div>
+          <div class="text-[11px] text-slate-500">五因子分</div>
           <div class="text-base font-semibold mt-0.5 text-blue-700">{{ selectedStock.ffScore.toFixed(1) }}</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
@@ -209,11 +209,11 @@ const goPool = () => {
           </div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">Data Quality</div>
+          <div class="text-[11px] text-slate-500">数据质量</div>
           <div class="text-base font-semibold mt-0.5">{{ selectedStock.dataQuality.toFixed(0) }}%</div>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-          <div class="text-[11px] text-slate-500">Report Size</div>
+          <div class="text-[11px] text-slate-500">报告字数</div>
           <div class="text-base font-semibold mt-0.5">{{ reportWordCount }}</div>
         </div>
       </div>
@@ -226,21 +226,21 @@ const goPool = () => {
           :class="activeTab === 'report' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
           @click="activeTab = 'report'"
         >
-          Report
+          研报
         </button>
         <button
           class="flex-1 rounded-lg px-3 py-2 text-sm"
           :class="activeTab === 'risk' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
           @click="activeTab = 'risk'"
         >
-          Risk
+          风险
         </button>
         <button
           class="flex-1 rounded-lg px-3 py-2 text-sm"
           :class="activeTab === 'factors' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'"
           @click="activeTab = 'factors'"
         >
-          Factors
+          因子
         </button>
       </div>
     </section>
@@ -248,8 +248,8 @@ const goPool = () => {
     <section class="mt-3 flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar">
       <div v-if="activeTab === 'report'" class="glass-panel rounded-xl p-4">
         <div class="flex items-center justify-between mb-3 text-xs text-[var(--color-text-secondary)]">
-          <span class="inline-flex items-center gap-1"><Sparkles class="w-3.5 h-3.5 text-blue-600" /> AI generated content</span>
-          <span v-if="reportUpdatedAt">Updated {{ reportUpdatedAt.toLocaleString() }}</span>
+          <span class="inline-flex items-center gap-1"><Sparkles class="w-3.5 h-3.5 text-blue-600" /> AI 生成内容</span>
+          <span v-if="reportUpdatedAt">更新于 {{ reportUpdatedAt.toLocaleString() }}</span>
         </div>
         <MarkdownReport :content="finalReport" />
       </div>
@@ -257,23 +257,23 @@ const goPool = () => {
       <div v-else-if="activeTab === 'risk'" class="glass-panel rounded-xl p-4 space-y-3">
         <div class="flex items-center gap-2 text-[var(--color-text-primary)]">
           <ShieldAlert class="w-4 h-4 text-amber-600" />
-          <h3 class="text-sm font-semibold">Portfolio Risk Summary</h3>
+          <h3 class="text-sm font-semibold">组合风险摘要</h3>
         </div>
         <p class="text-sm leading-7 text-[var(--color-text-secondary)]">
-          {{ riskAssessment || "No risk assessment yet. Please run a screener query first." }}
+          {{ riskAssessment || "暂无风险评估。请先运行一次选股策略。" }}
         </p>
         <p v-if="factorSummary" class="text-xs leading-6 text-slate-500 rounded-lg border border-slate-200 bg-slate-50 p-3">
           {{ factorSummary }}
         </p>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 leading-6">
-          <p>Position suggestion: {{ riskSummary.level === "High" ? "Target total exposure <= 40%" : riskSummary.level === "Medium" ? "Scale in gradually, target 40%-65%" : "Can increase exposure to around 70% with discipline" }}</p>
-          <p>Stop loss discipline: consider reducing when single-name loss approaches 8%.</p>
-          <p>Diversification: keep 5-8 names and avoid single-sector concentration.</p>
+          <p>仓位建议：{{ riskSummary.level === "高" ? "总仓位建议控制在 40% 以内" : riskSummary.level === "中" ? "适合分批建仓，目标仓位 40%-65%" : "可在纪律约束下逐步提高到约 70%" }}</p>
+          <p>止损纪律：单票亏损接近 8% 时建议复盘并考虑减仓。</p>
+          <p>分散要求：尽量保留 5-8 只标的，避免单一行业过度集中。</p>
         </div>
       </div>
 
       <div v-else class="glass-panel rounded-xl p-4">
-        <h3 class="text-sm font-semibold mb-3">Factor Breakdown</h3>
+        <h3 class="text-sm font-semibold mb-3">因子拆解</h3>
         <div class="grid grid-cols-5 gap-2 mb-3">
           <div v-for="item in factorExposures" :key="item.label" class="rounded-lg border border-slate-200 bg-white p-2 text-center">
             <div class="text-[10px] text-slate-500">{{ item.label }}</div>
@@ -293,7 +293,7 @@ const goPool = () => {
     </section>
 
     <div class="mt-3 text-xs text-[var(--color-text-secondary)] text-center">
-      AI generated content for research only, not financial advice.
+      AI 内容仅供研究参考，不构成投资建议。
     </div>
   </div>
 </template>

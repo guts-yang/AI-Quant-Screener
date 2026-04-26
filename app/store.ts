@@ -37,6 +37,26 @@ export interface ChatMessage {
   isAction?: boolean;
 }
 
+export interface UniverseOption {
+  key: string;
+  label: string;
+  description: string;
+  index_code?: string | null;
+}
+
+export interface Holding {
+  id?: number;
+  ths_code: string;
+  sec_name: string;
+  quantity: number;
+  cost_price: number;
+  latest_price: number;
+  market_value?: number;
+  pnl?: number;
+  pnl_pct?: number;
+  note?: string;
+}
+
 export type AgentStatusType = "idle" | "loading" | "success";
 export type AgentName = "data" | "factor" | "quant" | "risk" | "cio";
 
@@ -71,6 +91,11 @@ interface State {
   factorSummary: string;
   cioThinking: string;
   streamMessage: string;
+  universeOptions: UniverseOption[];
+  selectedUniverse: string;
+  universePreviewCount: number;
+  holdings: Holding[];
+  holdingsMessage: string;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:8006";
@@ -100,6 +125,16 @@ const state = reactive<State>({
   factorSummary: "",
   cioThinking: "",
   streamMessage: "",
+  universeOptions: [
+    { key: "local", label: "本地股票池", description: "使用数据库中已保存的股票池" },
+    { key: "csi300", label: "沪深300", description: "A股大盘核心资产" },
+    { key: "csi500", label: "中证500", description: "中盘成长与价值组合" },
+    { key: "csi1000", label: "中证1000", description: "小盘成长与高弹性组合" },
+  ],
+  selectedUniverse: localStorage.getItem("aqs_selected_universe") || "csi300",
+  universePreviewCount: 0,
+  holdings: [],
+  holdingsMessage: "",
 });
 
 let activeEventSource: EventSource | null = null;
@@ -242,6 +277,44 @@ const applyResult = (payload: ScreenerRunResponse | StreamEvent) => {
   state.factorSummary = String(payload.factor_summary ?? "");
 };
 
+const selectedUniverseLabel = () => {
+  const target = state.universeOptions.find((item) => item.key === state.selectedUniverse);
+  return target?.label ?? "当前股票池";
+};
+
+const setSelectedUniverse = (key: string) => {
+  state.selectedUniverse = key;
+  localStorage.setItem("aqs_selected_universe", key);
+};
+
+const loadUniverses = async () => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/universes`);
+  if (!response.ok) {
+    throw new Error(`股票池配置加载失败: ${response.status}`);
+  }
+  const payload = (await response.json()) as UniverseOption[];
+  if (Array.isArray(payload) && payload.length > 0) {
+    state.universeOptions = payload;
+    if (!payload.some((item) => item.key === state.selectedUniverse)) {
+      setSelectedUniverse(payload[0].key);
+    }
+  }
+};
+
+const previewUniverse = async (key = state.selectedUniverse) => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/universes/${encodeURIComponent(key)}`);
+  if (!response.ok) {
+    throw new Error(`股票池预览加载失败: ${response.status}`);
+  }
+  const payload = (await response.json()) as { count?: number; stocks?: Record<string, unknown>[] };
+  state.universePreviewCount = Number(payload.count ?? 0);
+  if (Array.isArray(payload.stocks) && payload.stocks.length > 0 && state.stocks.length === 0) {
+    const mapped = payload.stocks.map(mapStockRow);
+    state.stocks = mapped;
+    state.selectedStock = mapped[0] ?? null;
+  }
+};
+
 const stopScreener = () => {
   if (activeEventSource) {
     activeEventSource.close();
@@ -256,7 +329,7 @@ const runScreenerFallback = async (query: string) => {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, universe: state.selectedUniverse }),
   });
 
   if (!response.ok) {
@@ -275,7 +348,7 @@ const runScreenerWithStream = (query: string) =>
     state.streamMessage = "正在连接后端工作流...";
     state.cioThinking = "";
 
-    const streamUrl = `${API_BASE_URL}/api/v1/screener/stream?query=${encodeURIComponent(query)}`;
+    const streamUrl = `${API_BASE_URL}/api/v1/screener/stream?query=${encodeURIComponent(query)}&universe=${encodeURIComponent(state.selectedUniverse)}`;
     const source = new EventSource(streamUrl);
     activeEventSource = source;
 
@@ -307,7 +380,7 @@ const runScreenerWithStream = (query: string) =>
         const count = state.stocks.length;
         addChatMessage({
           sender: "ai",
-          text: `已完成筛选，共得到 ${count} 只候选标的，并生成最新 Markdown 研报。`,
+          text: `已基于「${selectedUniverseLabel()}」完成筛选，共得到 ${count} 只候选标的。研报已整理成可阅读格式，你可以去“研报”页查看完整结论。`,
           isAction: true,
         });
         return;
@@ -352,6 +425,36 @@ const runScreener = async (query: string) => {
   }
 };
 
+const loadHoldings = async () => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/holdings`);
+  if (!response.ok) {
+    throw new Error(`持仓加载失败: ${response.status}`);
+  }
+  const payload = (await response.json()) as { holdings?: Holding[]; count?: number };
+  state.holdings = Array.isArray(payload.holdings) ? payload.holdings : [];
+};
+
+const uploadHoldings = async (holdings: Holding[], replace = true) => {
+  const response = await fetch(`${API_BASE_URL}/api/v1/holdings/upload`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ holdings, replace }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`持仓上传失败: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { holdings?: Holding[]; count?: number };
+  state.holdings = Array.isArray(payload.holdings) ? payload.holdings : [];
+  state.holdingsMessage = `已导入 ${state.holdings.length} 条持仓`;
+  setTimeout(() => {
+    state.holdingsMessage = "";
+  }, 2200);
+};
+
 const openMobileSheet = (stock: Stock) => {
   state.selectedStock = stock;
   state.isMobileSheetOpen = true;
@@ -370,6 +473,11 @@ export const useAppStore = () => ({
   runScreener,
   stopScreener,
   runScreenerFallback,
+  loadUniverses,
+  previewUniverse,
+  setSelectedUniverse,
+  loadHoldings,
+  uploadHoldings,
   openMobileSheet,
   closeMobileSheet,
 });

@@ -166,3 +166,22 @@ class ApiTokens(Base):
     access_token: Mapped[str] = mapped_column(Text, nullable=False)
     refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
     expire_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class UserHolding(Base):
+    __tablename__ = "user_holdings"
+    __table_args__ = (Index("idx_user_holdings_code", "ths_code"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ths_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    sec_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    quantity: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    cost_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    latest_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=utc_now,
+        server_default=func.current_timestamp(),
+    )

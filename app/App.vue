@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, RouterView } from "vue-router";
-import { MessageSquare, LayoutGrid, FileText, User, Terminal, PanelLeftClose } from "lucide-vue-next";
+import { MessageSquare, LayoutGrid, FileText, User, Terminal, PanelLeftClose, BriefcaseBusiness } from "lucide-vue-next";
 import MobileBottomSheet from "./components/MobileBottomSheet.vue";
 
 interface NavItem {
@@ -16,6 +16,7 @@ const activePath = computed(() => route.path);
 const navItems: NavItem[] = [
   { to: "/chat", label: "AI 对话", icon: MessageSquare },
   { to: "/pool", label: "股票池", icon: LayoutGrid },
+  { to: "/holdings", label: "持仓", icon: BriefcaseBusiness },
   { to: "/report", label: "研报", icon: FileText },
   { to: "/profile", label: "我的", icon: User },
 ];
@@ -68,7 +69,7 @@ const pageTitle = computed(() => {
             <PanelLeftClose class="w-4 h-4 text-slate-400" />
             <h1 class="text-sm font-semibold text-[var(--color-text-primary)]">{{ pageTitle }}</h1>
           </div>
-          <div class="text-[10px] text-slate-500">Desktop Workspace</div>
+          <div class="text-[10px] text-slate-500">桌面工作台</div>
         </header>
         <div class="flex-1 overflow-y-auto p-5">
           <RouterView />
@@ -84,7 +85,7 @@ const pageTitle = computed(() => {
         </div>
         <div class="flex items-center space-x-1.5 text-[10px] text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200 font-medium tracking-wide uppercase">
           <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Screener Online</span>
+          <span>服务在线</span>
         </div>
       </header>
 

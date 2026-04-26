@@ -42,7 +42,7 @@ def get_data_source_configs() -> list[DataSourceConfig]:
         ),
         DataSourceConfig(
             name="tushare",
-            enabled=_to_bool(os.getenv("ENABLE_TUSHARE"), default=False),
+            enabled=_to_bool(os.getenv("ENABLE_TUSHARE"), default=tushare_configured),
             configured=tushare_configured,
             base_url=os.getenv("TUSHARE_BASE_URL", "https://api.waditu.com"),
             timeout_seconds=int(os.getenv("TUSHARE_HTTP_TIMEOUT_SECONDS", "20")),

@@ -8,12 +8,11 @@ from typing import Any, Callable, TypedDict
 
 import pandas as pd
 import requests
-from sqlalchemy import select
 
 from .database import SessionLocal
 from .factor_model import compute_fama_french_scores, factor_columns_for_report
 from .ifind_client import fetch_basic_data
-from .models import StockPool
+from .stock_universe import get_universe_components
 
 try:
     from langchain_core.prompts import ChatPromptTemplate
@@ -86,6 +85,7 @@ def _utc_now() -> datetime:
 
 class WorkflowState(TypedDict):
     user_query: str
+    universe_key: str
     stock_pool: pd.DataFrame
     factor_summary: str
     risk_assessment: str
@@ -203,15 +203,12 @@ def _render_prompt(system_prompt: str, user_prompt: str) -> tuple[str, str]:
     return rendered_system, rendered_user
 
 
-def _load_universe() -> pd.DataFrame:
+def _load_universe(universe_key: str = "local") -> pd.DataFrame:
     with SessionLocal() as db:
-        rows = db.execute(select(StockPool)).scalars().all()
-    if not rows:
+        df = get_universe_components(db, universe_key, persist=True)
+    if df.empty:
         return pd.DataFrame(columns=["ths_code", "sec_name", "market_type"])
-
-    return pd.DataFrame(
-        [{"ths_code": row.ths_code, "sec_name": row.sec_name, "market_type": row.market_type} for row in rows]
-    )
+    return df[["ths_code", "sec_name", "market_type"]].copy()
 
 
 def _pick_existing_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -255,10 +252,16 @@ class AgentWorkflow:
         workflow.add_edge("CIOAgent", END)
         return workflow.compile()
 
-    def run(self, user_query: str, event_callback: EventCallback | None = None) -> WorkflowState:
+    def run(
+        self,
+        user_query: str,
+        universe_key: str = "local",
+        event_callback: EventCallback | None = None,
+    ) -> WorkflowState:
         self._event_callback = event_callback
         initial_state: WorkflowState = {
             "user_query": user_query,
+            "universe_key": universe_key,
             "stock_pool": pd.DataFrame(),
             "factor_summary": "",
             "risk_assessment": "",
@@ -298,7 +301,7 @@ class AgentWorkflow:
         if not indicators:
             indicators = _sanitize_indicators([], query)
 
-        universe_df = _load_universe()
+        universe_df = _load_universe(state.get("universe_key", "local"))
         codes = universe_df["ths_code"].tolist() if not universe_df.empty else []
         if not codes:
             _emit(self._event_callback, "DataAgent", "done", "Data Agent 未找到股票池数据，返回空结果。")
@@ -457,5 +460,13 @@ def get_workflow() -> AgentWorkflow:
     return _workflow_singleton
 
 
-def run_agent_workflow(user_query: str, event_callback: EventCallback | None = None) -> WorkflowState:
-    return get_workflow().run(user_query=user_query, event_callback=event_callback)
+def run_agent_workflow(
+    user_query: str,
+    universe_key: str = "local",
+    event_callback: EventCallback | None = None,
+) -> WorkflowState:
+    return get_workflow().run(
+        user_query=user_query,
+        universe_key=universe_key,
+        event_callback=event_callback,
+    )

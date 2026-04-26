@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { Sparkles, User, BrainCircuit, Activity, Send } from "lucide-vue-next";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Sparkles, User, BrainCircuit, Activity, Send, Database } from "lucide-vue-next";
 import AgentStatusPill from "../components/AgentStatusPill.vue";
 import { useAppStore } from "../store";
 
@@ -13,12 +13,18 @@ const {
   stopScreener,
   streamMessage,
   cioThinking,
+  universeOptions,
+  selectedUniverse,
+  setSelectedUniverse,
+  loadUniverses,
+  previewUniverse,
 } = useAppStore();
 
 const input = ref("");
 const scrollRef = ref<HTMLDivElement | null>(null);
 
 const hasLoadingAgent = computed(() => Object.values(agentStatuses.value).some((status) => status === "loading"));
+const selectedUniverseText = computed(() => universeOptions.value.find((item) => item.key === selectedUniverse.value)?.label ?? "当前股票池");
 
 watch(
   [chatHistory, agentStatuses],
@@ -49,6 +55,23 @@ const handleSend = async () => {
   }
 };
 
+const handleUniverseChange = async () => {
+  try {
+    await previewUniverse(selectedUniverse.value);
+  } catch {
+    // 预览失败不影响用户发起筛选，后端运行时仍会尝试拉取。
+  }
+};
+
+onMounted(async () => {
+  try {
+    await loadUniverses();
+    await previewUniverse(selectedUniverse.value);
+  } catch {
+    // 保留本地默认选项。
+  }
+});
+
 onBeforeUnmount(() => {
   stopScreener();
 });
@@ -59,7 +82,7 @@ onBeforeUnmount(() => {
     <div class="h-14 border-b border-[var(--color-surface-border)] flex items-center justify-between px-4 sticky top-0 bg-[var(--color-surface)] z-20">
       <div class="flex items-center space-x-2">
         <BrainCircuit class="w-5 h-5 text-blue-600" />
-        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-700 to-indigo-500 bg-clip-text text-transparent">AI Quant Screener</span>
+        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-700 to-indigo-500 bg-clip-text text-transparent">智能选股助手</span>
       </div>
       <div class="flex items-center space-x-1 text-[10px] text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full border border-emerald-200">
         <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -68,20 +91,36 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="px-4 py-3 border-b border-[var(--color-surface-border)] bg-[var(--color-background)]">
-      <div class="text-xs text-[var(--color-text-secondary)] font-medium mb-2 uppercase tracking-wider">Agents Workflow</div>
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div class="text-xs text-[var(--color-text-secondary)] font-medium mb-1">智能体工作流</div>
+          <div class="text-[11px] text-slate-500">当前范围：{{ selectedUniverseText }}</div>
+        </div>
+        <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+          <Database class="w-3.5 h-3.5 text-blue-600" />
+          <select
+            :value="selectedUniverse"
+            class="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-400"
+            :disabled="isRunning"
+            @change="(event) => { setSelectedUniverse((event.target as HTMLSelectElement).value); handleUniverseChange(); }"
+          >
+            <option v-for="item in universeOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
+          </select>
+        </label>
+      </div>
       <div class="grid grid-cols-2 gap-2">
-        <AgentStatusPill name="Data" :status="agentStatuses.data" />
-        <AgentStatusPill name="FF5" :status="agentStatuses.factor" />
-        <AgentStatusPill name="Quant" :status="agentStatuses.quant" />
-        <AgentStatusPill name="Risk" :status="agentStatuses.risk" />
-        <AgentStatusPill name="CIO" :status="agentStatuses.cio" class="col-span-2" />
+        <AgentStatusPill name="数据" :status="agentStatuses.data" />
+        <AgentStatusPill name="因子" :status="agentStatuses.factor" />
+        <AgentStatusPill name="筛选" :status="agentStatuses.quant" />
+        <AgentStatusPill name="风控" :status="agentStatuses.risk" />
+        <AgentStatusPill name="研报" :status="agentStatuses.cio" class="col-span-2" />
       </div>
       <p v-if="streamMessage" class="mt-2 text-xs text-[var(--color-text-secondary)]">{{ streamMessage }}</p>
       <div
         v-if="cioThinking"
         class="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] leading-5 text-blue-800"
       >
-        <div class="font-semibold text-blue-700 mb-1">CIO 推理过程（SSE）</div>
+        <div class="font-semibold text-blue-700 mb-1">研报生成进度</div>
         <pre class="whitespace-pre-wrap break-words font-sans">{{ cioThinking }}</pre>
       </div>
     </div>
@@ -132,7 +171,7 @@ onBeforeUnmount(() => {
           <div class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style="animation-delay: 150ms" />
           <div class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style="animation-delay: 300ms" />
         </div>
-        <span class="text-xs">后端工作流执行中...</span>
+        <span class="text-xs">正在分析，请稍候...</span>
       </div>
     </div>
 

@@ -3,6 +3,7 @@ import ChatView from "./views/ChatView.vue";
 import PoolView from "./views/PoolView.vue";
 import ReportView from "./views/ReportView.vue";
 import ProfileView from "./views/ProfileView.vue";
+import HoldingsView from "./views/HoldingsView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -18,6 +19,10 @@ export const router = createRouter({
     {
       path: "/pool",
       component: PoolView,
+    },
+    {
+      path: "/holdings",
+      component: HoldingsView,
     },
     {
       path: "/report",
